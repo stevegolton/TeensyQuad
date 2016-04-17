@@ -13,7 +13,6 @@ CPU = cortex-m4
 OBJECTS	= main.o \
 	      sysinit.o \
 	      crt0.o \
-	      i2c.o \
 	      freertos/portable/port.o \
 	      freertos/croutine.o \
 	      freertos/event_groups.o \
@@ -22,6 +21,8 @@ OBJECTS	= main.o \
 	      freertos/tasks.o \
 	      freertos/timers.o \
 	      freertos/heap_2.o \
+	      i2c.o \
+	      flight.o \
 
 #  Select the toolchain by providing a path to the top level
 #  directory; this will be the folder that holds the

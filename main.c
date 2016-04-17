@@ -6,6 +6,7 @@
 #include "portmacro.h"
 #include "timers.h"
 #include "i2c.h"
+#include "flight.h"
 
 // Define me if you want debugging, remove me for release!
 //#define configASSERT( x )     if( ( x ) == 0 ) { taskDISABLE_INTERRUPTS(); for( ;; ); }
@@ -232,50 +233,6 @@ static void uart_puts( UART_MemMapPtr channel, const char *const s )
 	}
 }
 
-static int printuint( char *buf, int maxlen, unsigned int input )
-{
-	int idx, len;
-	unsigned int copy = input;
-
-	// If 0 just put a 0
-	if ( input == 0 )
-	{
-		if ( maxlen < 2 ) return 0;
-
-		buf[0] = '0';
-		buf[1] = 0;
-		return 2;
-	}
-
-	// Work out how long in decimal characters our number is going to be
-	len = 0;
-	while ( copy > 0 )
-	{
-		copy /= 10;
-		len++;
-	}
-
-	// Get out if we are too long
-	if ( len >= maxlen ) return 0;
-
-	// Stick a NULL at the end
-	buf[len] = 0;
-
-	// Copy off the index of the last character in our array and increment the
-	// length to account for the final NULL character
-	idx = len - 1;
-	len++;
-
-	// Write out the number backwards into the buffer
-	while ( input > 0 )
-	{
-		buf[idx--] = '0' + ( input % 10 );
-		input /= 10;
-	}
-
-	return len;
-}
-
 /**
  * @brief		Blinks a number of times with a given interval.
  * @param[in]	reps		Number of times to blink.
@@ -307,7 +264,7 @@ static void taskhandler_flight( void *arg )
 	char buf[16];
 	uint8_t checkbyte;
 
-	// Slow blink forever
+	// Loop forever
 	for ( ;; )
 	{
 		blink( 1, 1000 );
@@ -327,6 +284,9 @@ static void taskhandler_flight( void *arg )
 		uart_puts( UART0_BASE_PTR, "Checkbyte = " );
 		uart_puts( UART0_BASE_PTR, buf );
 		uart_puts( UART0_BASE_PTR, "\r\n" );
+
+		// Process flight controller
+		flight_process();
 	}
 }
 
@@ -340,6 +300,33 @@ static void taskhandler_comms( void *arg )
 	vTaskSuspend( NULL );
 }
 
+static void set_rotor_spd( const size_t rotor_number, const uint16_t spd )
+{
+	char buf[16];
+
+	uart_puts( UART0_BASE_PTR, "Set rotor " );
+	printuint( buf, 16, rotor_number );
+	uart_puts( UART0_BASE_PTR, buf );
+	uart_puts( UART0_BASE_PTR, " to " );
+	printuint( buf, 16, spd );
+	uart_puts( UART0_BASE_PTR, buf );
+	uart_puts( UART0_BASE_PTR, "\r\n" );
+
+	return;
+}
+
+static uint16_t get_recvr_channel( const size_t channel_number )
+{
+	char buf[16];
+
+	uart_puts( UART0_BASE_PTR, "Get receiver " );
+	printuint( buf, 16, channel_number );
+	uart_puts( UART0_BASE_PTR, buf );
+	uart_puts( UART0_BASE_PTR, "\r\n" );
+
+	return 0;
+}
+
 /**
 ** @brief		Entry point to program.
 ** @return		Error code.
@@ -350,6 +337,9 @@ int main( void )
 	init_led();
 	init_serial( UART0_BASE_PTR );
 	init_i2c();
+
+	// Initialise flight controller
+	flight_setup( set_rotor_spd, get_recvr_channel );
 
 	// Flash a little startup sequence, this isn't necessary at all, just nice
 	// to see a familiar sign before things start breaking!
