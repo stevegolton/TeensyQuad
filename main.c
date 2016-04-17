@@ -227,24 +227,25 @@ static void blink( const int reps, const int period_ms )
 
 /**
  * @brief		Runs recursive flight processing.
+ * @param[in]	arg		Opaque pointer to our user data.
  */
 static void taskhandler_flight( void *arg )
 {
+	// Slow blink forever
 	for ( ;; )
 	{
-		blink( 1, 2000 );
+		blink( 1, 1000 );
 	}
 }
 
 /**
  * @brief		Runs recursive comms processing.
+ * @param[in]	arg		Opaque pointer to our user data.
  */
 static void taskhandler_comms( void *arg )
 {
-	for ( ;; )
-	{
-		//blink( 1, 1000 );
-	}
+	// Suspend ourselves forever!
+	vTaskSuspend( NULL );
 }
 
 /**
@@ -274,7 +275,7 @@ int main( void )
 
 	// Create our comms task
 	xTaskCreate( taskhandler_comms,				// The task's callback function
-				 "Flight",						// Task name
+				 "Comms",						// Task name
 				 configMINIMAL_STACK_SIZE,		// We can specify different stack sizes for each task? Cool!
 				 NULL,							// Parameter to pass to the callback function, we have nothhing to pass..
 				 0,								// Priority, this is our only task so.. lets just use 0
