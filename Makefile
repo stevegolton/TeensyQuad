@@ -13,6 +13,7 @@ CPU = cortex-m4
 OBJECTS	= main.o \
 	      sysinit.o \
 	      crt0.o \
+	      i2c.o \
 	      freertos/portable/port.o \
 	      freertos/croutine.o \
 	      freertos/event_groups.o \

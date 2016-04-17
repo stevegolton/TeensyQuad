@@ -5,12 +5,19 @@
 #include "FreeRTOSConfig.h"
 #include "portmacro.h"
 #include "timers.h"
+#include "i2c.h"
 
 // Define me if you want debugging, remove me for release!
 //#define configASSERT( x )     if( ( x ) == 0 ) { taskDISABLE_INTERRUPTS(); for( ;; ); }
 
 #define STARTUP_BLINK_COUNT		( 3 )
 #define STARTUP_BLINK_PERIOD	( 100 )
+
+// I2C addresses
+#define LSM9DS0_XM			( 0x1D ) // Would be 0x1E if SDO_XM is LOW
+#define LSM9DS0_G			( 0x6B ) // Would be 0x6A if SDO_G is LOW
+#define WHO_AM_I_G			( 0x0F )
+#define WHO_AM_I_XM			( 0x0F )
 
 /**
  * @brief		Delay using a loop. Milliseconds are very approximate based on
@@ -160,6 +167,28 @@ void init_serial( const UART_MemMapPtr channel )
 	UART_C2_REG( channel ) |= ( UART_C2_TE_MASK | UART_C2_RE_MASK );
 }
 
+void init_i2c( void )
+{
+	// Enable interrupt in NVIC and set priority to 0
+	// See the vector channel assignments in K20P121M100SF2RM.pdf page 69
+	// The interupt for I2C0 is number 79:
+	// 24 / 32 = 0
+	// 24 % 32 = 24
+	// Therefore we choose the 0th register and set bit 24 (INT_I2C0 - 16)
+	NVICICPR0 |= ( 1 << 24 );
+	NVICISER0 |= ( 1 << 24 );
+	NVICIP24 = 0x00;
+
+	SIM_SCGC4 |= SIM_SCGC4_I2C0_MASK;
+	SIM_SCGC5 |= SIM_SCGC5_PORTB_MASK;
+
+	PORTB_PCR2 = PORT_PCR_MUX(0x02) | PORT_PCR_ODE_MASK;
+	PORTB_PCR3 = PORT_PCR_MUX(0x02) | PORT_PCR_ODE_MASK;
+
+	// TODO check status?
+	i2c_init( 0, 0x01, 0x20 );
+}
+
 /**
  * @brief		Get a character from the buffer.
  * @param[in]	channel		UART module's base register pointer.
@@ -203,6 +232,50 @@ static void uart_puts( UART_MemMapPtr channel, const char *const s )
 	}
 }
 
+static int printuint( char *buf, int maxlen, unsigned int input )
+{
+	int idx, len;
+	unsigned int copy = input;
+
+	// If 0 just put a 0
+	if ( input == 0 )
+	{
+		if ( maxlen < 2 ) return 0;
+
+		buf[0] = '0';
+		buf[1] = 0;
+		return 2;
+	}
+
+	// Work out how long in decimal characters our number is going to be
+	len = 0;
+	while ( copy > 0 )
+	{
+		copy /= 10;
+		len++;
+	}
+
+	// Get out if we are too long
+	if ( len >= maxlen ) return 0;
+
+	// Stick a NULL at the end
+	buf[len] = 0;
+
+	// Copy off the index of the last character in our array and increment the
+	// length to account for the final NULL character
+	idx = len - 1;
+	len++;
+
+	// Write out the number backwards into the buffer
+	while ( input > 0 )
+	{
+		buf[idx--] = '0' + ( input % 10 );
+		input /= 10;
+	}
+
+	return len;
+}
+
 /**
  * @brief		Blinks a number of times with a given interval.
  * @param[in]	reps		Number of times to blink.
@@ -231,10 +304,29 @@ static void blink( const int reps, const int period_ms )
  */
 static void taskhandler_flight( void *arg )
 {
+	char buf[16];
+	uint8_t checkbyte;
+
 	// Slow blink forever
 	for ( ;; )
 	{
 		blink( 1, 1000 );
+
+		/* Read WHO_AM_I_G from LSM9DS0_G */
+		i2c_read_byte( 0, LSM9DS0_G, WHO_AM_I_G, &checkbyte );
+
+		printuint( buf, 16, checkbyte );
+		uart_puts( UART0_BASE_PTR, "Checkbyte = " );
+		uart_puts( UART0_BASE_PTR, buf );
+		uart_puts( UART0_BASE_PTR, "\r\n" );
+
+		/* Read WHO_AM_I_XM from LSM9DS0_XM */
+		i2c_read_byte( 0, LSM9DS0_XM, WHO_AM_I_XM, &checkbyte );
+
+		printuint( buf, 16, checkbyte );
+		uart_puts( UART0_BASE_PTR, "Checkbyte = " );
+		uart_puts( UART0_BASE_PTR, buf );
+		uart_puts( UART0_BASE_PTR, "\r\n" );
 	}
 }
 
@@ -257,6 +349,7 @@ int main( void )
 	// Initialise hardware and peripherals
 	init_led();
 	init_serial( UART0_BASE_PTR );
+	init_i2c();
 
 	// Flash a little startup sequence, this isn't necessary at all, just nice
 	// to see a familiar sign before things start breaking!
