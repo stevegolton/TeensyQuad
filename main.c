@@ -15,11 +15,10 @@
 #define STARTUP_BLINK_COUNT		( 3 )
 #define STARTUP_BLINK_PERIOD	( 100 )
 
-// I2C addresses
 #define LSM9DS0_XM			( 0x1D ) // Would be 0x1E if SDO_XM is LOW
 #define LSM9DS0_G			( 0x6B ) // Would be 0x6A if SDO_G is LOW
-#define WHO_AM_I_G			( 0x0F )
-#define WHO_AM_I_XM			( 0x0F )
+
+static stLSM9DS0_t lsm9dso_dvr;
 
 /**
  * @brief		Delay using a loop. Milliseconds are very approximate based on
@@ -328,6 +327,27 @@ static uint16_t get_recvr_channel( const size_t channel_number )
 	return 0;
 }
 
+static void write_byte( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddress, uint8_t data )
+{
+	uart_puts( UART0_BASE_PTR, "Writing byte\r\n" );
+
+	return;
+}
+
+static uint8_t read_byte( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddress )
+{
+	uart_puts( UART0_BASE_PTR, "Reading byte\r\n" );
+
+	return 0;
+}
+
+static void read_bytes( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddress, uint8_t * dest, uint8_t count )
+{
+	uart_puts( UART0_BASE_PTR, "Reading bytes\r\n" );
+
+	return;
+}
+
 /**
 ** @brief		Entry point to program.
 ** @return		Error code.
@@ -339,7 +359,8 @@ int main( void )
 	init_serial( UART0_BASE_PTR );
 	init_i2c();
 
-	// Initialise flight controller
+	// Initialise LSM driver and flight controller
+	LSM9DS0_Setup( &lsm9dso_dvr, MODE_I2C, LSM9DS0_G, LSM9DS0_XM, write_byte, read_byte, read_bytes );
 	flight_setup( set_rotor_spd, get_recvr_channel );
 
 	// Flash a little startup sequence, this isn't necessary at all, just nice
@@ -348,6 +369,8 @@ int main( void )
 
 	// Say hello!
 	uart_puts( UART0_BASE_PTR, "Hello, World!\r\n" );
+
+	LSM9DS0_begin( &lsm9dso_dvr );
 
 	// Create our flight task
 	xTaskCreate( taskhandler_flight,			// The task's callback function

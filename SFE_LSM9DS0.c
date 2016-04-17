@@ -183,12 +183,17 @@ void LSM9DS0_Setup( stLSM9DS0_t * stThis,
 	// If we're using SPI, these variables store the chip-select pins.
 	stThis->xmAddress = xmAddr;
 	stThis->gAddress = gAddr;
+
+	// Store local copies of our I2C interface
+	stThis->read_byte = read_byte;
+	stThis->read_bytes = read_bytes;
+	stThis->write_byte = write_byte;
 }
 
 /* ************************************************************************** */
 uint16_t LSM9DS0_begin( stLSM9DS0_t * stThis )
 {
-	LSM9DS0_begin_adv( stThis,
+	return LSM9DS0_begin_adv( stThis,
 					   G_SCALE_245DPS,
 					   A_SCALE_2G,
 					   M_SCALE_2GS,
@@ -228,7 +233,7 @@ uint16_t LSM9DS0_begin_adv( stLSM9DS0_t * stThis,
 	calcgRes(stThis); // Calculate DPS / ADC tick, stored in gRes variable
 	calcmRes(stThis); // Calculate Gs / ADC tick, stored in mRes variable
 	calcaRes(stThis); // Calculate g / ADC tick, stored in aRes variable
-	
+
 	// Now, initialize our hardware interface.
 	if (stThis->interfaceMode == MODE_I2C)			// If we're using I2C
 		initI2C(stThis);							// Initialize I2C

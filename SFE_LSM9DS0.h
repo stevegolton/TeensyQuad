@@ -243,9 +243,6 @@ struct stLSM9DS0
 	//	- xmAddr = If MODE_I2C, this is the I2C address of the accel/mag.
 	//				If MODE_SPI, this is the cs pin of the accel/mag (CSXM)
 
-
-
-
 	// PUBLIC
 	// We'll store the gyro, accel, and magnetometer readings in a series of
 	// public class variables. Each sensor gets three variables -- one for each

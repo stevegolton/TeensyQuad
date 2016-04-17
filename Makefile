@@ -76,7 +76,7 @@ DEBUG = -g
 
 #  List the directories to be searched for libraries during linking.
 #  Optionally, list archives (libxxx.a) to be included during linking. 
-LIBDIRS  = -L/usr/lib/arm-none-eabi/lib/thumb -L/usr/lib/gcc/arm-none-eabi/4.8.2/thumb
+LIBDIRS  = -L/usr/lib/arm-none-eabi/lib/thumb -L/usr/lib/gcc/arm-none-eabi/4.8.2/armv7-ar/thumb/softfp/
 LIBS = -lc -lgcc
 
 #  Compiler options
