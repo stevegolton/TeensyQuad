@@ -1,5 +1,6 @@
+#include <string.h>
+
 #include "common.h"
-#include "string.h"
 #include "FreeRTOS.h"
 #include "FreeRTOSConfig.h"
 #include "portmacro.h"
@@ -103,14 +104,103 @@ void vApplicationMallocFailedHook( void )
 
 
 /**
- * @brief		Initialises all our hardware registers.
+ * @brief		Initialises the onboard LED.
  */
-static void init_hardware( void )
+static void init_led( void )
 {
 	// Initialise on board LED
 	PORTC_PCR5 = PORT_PCR_MUX( 0x1 );	// LED is on PC5 (pin 13), config as GPIO (alt = 1)
 	GPIOC_PDDR = ( 1 << 5 );			// make this an output pin
 	GPIOC_PCOR = ( 1 << 5 );			// start with LED off
+}
+
+/**
+ * @brief		Initialises the serial port module, baud rate=115200 8N1, hw
+ * 				flow control disabled.
+ * @param[in]	channel		UART module's base register pointer.
+ */
+void init_serial( const UART_MemMapPtr channel )
+{
+	int baud = 115200;
+	register uint16_t ubd, brfa;
+	uint8_t temp;
+
+	// Initialise serial port pins
+	PORTB_PCR16 = PORT_PCR_MUX( 0x3 );
+	PORTB_PCR17 = PORT_PCR_MUX( 0x3 );
+
+	/* Enable the clock to UART0 */
+	SIM_SCGC4 |= SIM_SCGC4_UART0_MASK;
+
+	/* Make sure that the transmitter and receiver are disabled while we
+	* change settings.
+	*/
+	UART_C2_REG( channel ) &= ~( UART_C2_TE_MASK | UART_C2_RE_MASK );
+
+	/* Configure the UART for 8-bit mode, no parity */
+	/* We need all default settings, so entire register is cleared */
+	UART_C1_REG( channel ) = 0;
+
+	/* Calculate baud settings */
+	ubd = (uint16_t)( ( mcg_clk_khz * 1000)/( baud * 16 ) );
+
+	/* Save off the current value of the UARTx_BDH except for the SBR */
+	temp = UART_BDH_REG( channel ) & ~( UART_BDH_SBR( 0x1F ) );
+	UART_BDH_REG( channel ) = temp | UART_BDH_SBR( ( ( ubd & 0x1F00 ) >> 8 ) );
+	UART_BDL_REG( channel ) = (uint8_t)( ubd & UART_BDL_SBR_MASK );
+
+	/* Determine if a fractional divider is needed to get closer to the baud rate */
+	brfa = ( ( ( mcg_clk_khz * 32000 ) / ( baud * 16 ) ) - ( ubd * 32 ) );
+
+	/* Save off the current value of the UARTx_C4 register except for the BRFA */
+	temp = UART_C4_REG( channel ) & ~( UART_C4_BRFA( 0x1F ) );
+	UART_C4_REG( channel ) = temp | UART_C4_BRFA( brfa );
+
+	/* Enable receiver and transmitter */
+	UART_C2_REG( channel ) |= ( UART_C2_TE_MASK | UART_C2_RE_MASK );
+}
+
+/**
+ * @brief		Get a character from the buffer.
+ * @param[in]	channel		UART module's base register pointer.
+ * @return		The character received from our FIFO.
+ */
+char uart_getchar( const UART_MemMapPtr channel )
+{
+	/* Wait until character has been received */
+	while (!(UART_S1_REG(channel) & UART_S1_RDRF_MASK));
+
+	/* Return the 8-bit data from the receiver */
+	return UART_D_REG(channel);
+}
+
+/**100
+ * @brief		Put a character into the tx buffer.
+ * @param[in]	channel		UART module's base register pointer.
+ * @param[in]	ch			Character to send.
+ */
+static void uart_putchar( const UART_MemMapPtr channel, const char ch )
+{
+	/* Wait until space is available in the FIFO */
+	while(!(UART_S1_REG(channel) & UART_S1_TDRE_MASK));
+
+	/* Send the character */
+	UART_D_REG(channel) = (uint8_t)ch;
+}
+
+/**
+ * @brief		Put a string into the tx buffer.
+ * @param[in]	channel		UART module's base register pointer.
+ * @param[in]	ch			Characters to send.
+ */
+static void uart_puts( UART_MemMapPtr channel, const char *const s )
+{
+	int i;
+
+	for ( i = 0; i < strlen( s ); i++ )
+	{
+		uart_putchar( channel, s[i] );
+	}
 }
 
 /**
@@ -163,13 +253,16 @@ static void taskhandler_comms( void *arg )
 */
 int main( void )
 {
-	// This behemoth initialises all the hardware registers, peripherals we will
-	// need in order for our board to work
-	init_hardware();
+	// Initialise hardware and peripherals
+	init_led();
+	init_serial( UART0_BASE_PTR );
 
 	// Flash a little startup sequence, this isn't necessary at all, just nice
 	// to see a familiar sign before things start breaking!
 	blink( STARTUP_BLINK_COUNT, STARTUP_BLINK_PERIOD );
+
+	// Say hello!
+	uart_puts( UART0_BASE_PTR, "Hello, World!\r\n" );
 
 	// Create our flight task
 	xTaskCreate( taskhandler_flight,			// The task's callback function
