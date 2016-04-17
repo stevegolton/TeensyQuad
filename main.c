@@ -1,6 +1,5 @@
 #include "common.h"
 #include "string.h"
-
 #include "FreeRTOS.h"
 #include "FreeRTOSConfig.h"
 #include "portmacro.h"
@@ -9,89 +8,13 @@
 // Define me if you want debugging, remove me for release!
 //#define configASSERT( x )     if( ( x ) == 0 ) { taskDISABLE_INTERRUPTS(); for( ;; ); }
 
-static __inline__ void dumbdelay_ms( const uint32_t ms );
-static void exampleTaskHandler( void *pvParameters );
-static void timerCallback( TimerHandle_t xTimer );
-
-static TimerHandle_t exampleTimer = NULL;
-static int ledstate = 0;
+#define STARTUP_BLINK_COUNT		( 3 )
+#define STARTUP_BLINK_PERIOD	( 100 )
 
 /**
-** @brief		Entry point to program
-*/
-int main( void )
-{
-	int idx;
-
-	// Initialize on board LED
-	PORTC_PCR5 = PORT_PCR_MUX( 0x1 );	// LED is on PC5 (pin 13), config as GPIO (alt = 1)
-	GPIOC_PDDR = ( 1 << 5 );			// make this an output pin
-	GPIOC_PCOR = ( 1 << 5 );			// start with LED off
-
-	/* Configure pin as output */
-	/* GPIOC_PDDR: PDD|=0x20 */
-	GPIOC_PDDR |= GPIO_PDDR_PDD(0x20);
-
-	/* Set initialization value */
-	/* GPIOC_PDOR: PDO&=~0x20 */
-	GPIOC_PDOR &= (uint32_t)~(uint32_t)(GPIO_PDOR_PDO(0x20));
-
-	/* Initialization of Port Control register */
-	/* PORTC_PCR5: ISF=0,MUX=1 */
-	PORTC_PCR5 = (uint32_t)((PORTC_PCR5 & (uint32_t)~(uint32_t)(
-		PORT_PCR_ISF_MASK |
-		PORT_PCR_MUX(0x06)
-	   )) | (uint32_t)(
-		PORT_PCR_MUX(0x01)
-	   ));
-
-	// Flash a little startup sequence, this isn't necessary at all, just nice
-	// to see a familiar sign before things start breaking!
-	for ( idx = 0; idx < 3; idx ++ )
-	{
-		// Set LED
-		GPIOC_PSOR = ( 1 << 5 );
-		dumbdelay_ms( 50 );
-
-		// Clear LED
-		GPIOC_PCOR = ( 1 << 5 );
-		dumbdelay_ms( 50 );
-	}
-
-	// Create a timer with a period of 500ms
-	exampleTimer = xTimerCreate( "exampleTimer", 					/* A text name, purely to help debugging. */
-								 ( 500UL / portTICK_PERIOD_MS ),	/* The timer period, in this case 500ms. */
-								 pdTRUE,							/* We want this to be a recurring timer so set uxAutoReload to pdTRUE. */
-								 ( void * ) 0,						/* The ID is not used, so can be set to anything. */
-								 timerCallback						/* The callback function that is called when the timer expires. */
-							);
-
-	// Create a task
-	xTaskCreate( exampleTaskHandler,			// The task's callback function
-				 "Task",						// Task name
-				 configMINIMAL_STACK_SIZE,		// We can specify different stack sizes for each task? Cool!
-				 NULL,							// Parameter to pass to the callback function, we have nothhing to pass..
-				 0,								// Priority, this is our only task so.. lets just use 0
-				 NULL );						// We could put a pointer to a task handle here which will be filled in when the task is created
-
-	// Start the tasks and timer running, this should never return freertos will
-	// branch directly into the idle task.
-	vTaskStartScheduler();
-
-	for(;;)
-	{
-		// We should never get here, so just sit in this loop forever...
-		// Probably better to flash a error sequence here so we know something
-		// has gone horribly wrong...
-	}
-
-	// We definitely should never get here, this return is just to keep the
-	// compiler happy
-	return  0;
-}
-
-/**
- * @brief		Delay using a loop.
+ * @brief		Delay using a loop. Milliseconds are very approximate based on
+ * 				trial and error for our clock speed. Interrupts with slow this
+ * 				down.
  * @param[in]	ms		Delay in ms.
  */
 static __inline__ void dumbdelay_ms( const uint32_t ms )
@@ -104,41 +27,6 @@ static __inline__ void dumbdelay_ms( const uint32_t ms )
 
 	// Dumb delay
 	for ( index = 0; index < loops; index++ );
-}
-
-/**
- * @brief		Example task, simply starts our timer and loops forever.
- */
-static void exampleTaskHandler( void *pvParameters )
-{
-	// Start the timer
-	xTimerStart( exampleTimer, 0 );
-
-	for (;;)
-	{
-		//GPIOC_PSOR = ( 1 << 5 );
-		//dumbdelay_ms( 500 );
-		//GPIOC_PCOR = ( 1 << 5 );
-		//dumbdelay_ms( 500 );
-	}
-}
-
-/**
- * @brief		Callback for our timer, toggles the led.
- * @param[in]	xTimer		Timer handle.
- */
-static void timerCallback( TimerHandle_t xTimer )
-{
-	if ( 1 == ledstate )
-	{
-		ledstate = 0;
-		GPIOC_PCOR = ( 1 << 5 );
-	}
-	else
-	{
-		ledstate = 1;
-		GPIOC_PSOR = ( 1 << 5 );
-	}
 }
 
 /*!
@@ -211,4 +99,98 @@ void vApplicationMallocFailedHook( void )
 	taskDISABLE_INTERRUPTS();
 	/* Write your code here ... */
 	for(;;) {}
+}
+
+
+/**
+ * @brief		Initialises all our hardware registers.
+ */
+static void init_hardware( void )
+{
+	// Initialise on board LED
+	PORTC_PCR5 = PORT_PCR_MUX( 0x1 );	// LED is on PC5 (pin 13), config as GPIO (alt = 1)
+	GPIOC_PDDR = ( 1 << 5 );			// make this an output pin
+	GPIOC_PCOR = ( 1 << 5 );			// start with LED off
+}
+
+/**
+ * @brief		Blinks a number of times with a given interval.
+ * @param[in]	reps		Number of times to blink.
+ * @param[in]	period_ms	Blink period (ms).
+ */
+static void blink( const int reps, const int period_ms )
+{
+	int halfperiod_ms = period_ms / 2;
+	int idx;
+
+	for ( idx = 0; idx < reps; idx ++ )
+	{
+		// Set LED
+		GPIOC_PSOR = ( 1 << 5 );
+		dumbdelay_ms( halfperiod_ms );
+
+		// Clear LED
+		GPIOC_PCOR = ( 1 << 5 );
+		dumbdelay_ms( halfperiod_ms );
+	}
+}
+
+/**
+ * @brief		Runs recursive flight processing.
+ */
+static void taskhandler_flight( void *arg )
+{
+	for ( ;; )
+	{
+		blink( 1, 2000 );
+	}
+}
+
+/**
+ * @brief		Runs recursive comms processing.
+ */
+static void taskhandler_comms( void *arg )
+{
+	for ( ;; )
+	{
+		//blink( 1, 1000 );
+	}
+}
+
+/**
+** @brief		Entry point to program.
+** @return		Error code.
+*/
+int main( void )
+{
+	// This behemoth initialises all the hardware registers, peripherals we will
+	// need in order for our board to work
+	init_hardware();
+
+	// Flash a little startup sequence, this isn't necessary at all, just nice
+	// to see a familiar sign before things start breaking!
+	blink( STARTUP_BLINK_COUNT, STARTUP_BLINK_PERIOD );
+
+	// Create our flight task
+	xTaskCreate( taskhandler_flight,			// The task's callback function
+				 "Flight",						// Task name
+				 configMINIMAL_STACK_SIZE,		// We can specify different stack sizes for each task? Cool!
+				 NULL,							// Parameter to pass to the callback function, we have nothhing to pass..
+				 1,								// Priority, this is our only task so.. lets just use 0
+				 NULL );						// We could put a pointer to a task handle here which will be filled in when the task is created
+
+	// Create our comms task
+	xTaskCreate( taskhandler_comms,				// The task's callback function
+				 "Flight",						// Task name
+				 configMINIMAL_STACK_SIZE,		// We can specify different stack sizes for each task? Cool!
+				 NULL,							// Parameter to pass to the callback function, we have nothhing to pass..
+				 0,								// Priority, this is our only task so.. lets just use 0
+				 NULL );						// We could put a pointer to a task handle here which will be filled in when the task is created
+
+	// Start the tasks and timer running, this should never return as FreeRTOS
+	// will branch directly into the idle task.
+	vTaskStartScheduler();
+
+	// We should never get here, this return is just to keep the compiler happy
+	return 0;
 }
