@@ -23,6 +23,7 @@ OBJECTS	= main.o \
 	      freertos/heap_2.o \
 	      i2c.o \
 	      flight.o \
+	      SFE_LSM9DS0.o \
 
 #  Select the toolchain by providing a path to the top level
 #  directory; this will be the folder that holds the
@@ -75,11 +76,12 @@ DEBUG = -g
 
 #  List the directories to be searched for libraries during linking.
 #  Optionally, list archives (libxxx.a) to be included during linking. 
-LIBDIRS  = -L/usr/lib/arm-none-eabi/lib/thumb
-LIBS = -lc
+LIBDIRS  = -L/usr/lib/arm-none-eabi/lib/thumb -L/usr/lib/gcc/arm-none-eabi/4.8.2/thumb
+LIBS = -lc -lgcc
 
 #  Compiler options
 GCFLAGS = -Wall -fno-common -mcpu=$(CPU) -mthumb -O$(OPTIMIZATION) $(DEBUG)
+GCFLAGS += -mfloat-abi=soft
 GCFLAGS += $(INCDIRS)
 
 # You can uncomment the following line to create an assembly output

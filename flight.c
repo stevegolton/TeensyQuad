@@ -16,17 +16,21 @@ void flight_setup( set_rotor_spd_t set_rotor_spd, get_recvr_channel_t get_recvr_
 	return;
 }
 
-void flight_process( void )
+void flight_process( uint16_t timestep_ms, uint16_t *accel, uint16_t *gyro )
 {
 	int rcvr_idx;
 	uint16_t rcvr_values[NUM_RCVR_CHANNELS];
 	int motor_idx;
 
+	// Fetch receiver inputs
 	for ( rcvr_idx = 0; rcvr_idx < NUM_RCVR_CHANNELS; rcvr_idx++ )
 	{
 		rcvr_values[rcvr_idx] = _get_recvr_channel( rcvr_idx );
 	}
 
+	// TODO Update the flight model
+
+	// Update motor outputs
 	for ( motor_idx = 0; motor_idx < NUM_MOTORS; motor_idx++ )
 	{
 		_set_rotor_spd( motor_idx, 0 );

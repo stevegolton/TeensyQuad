@@ -10,7 +10,15 @@
 typedef void (*set_rotor_spd_t)( const size_t rotor_number, const uint16_t spd );
 typedef uint16_t (*get_recvr_channel_t)( const size_t channel_number );
 
-void flight_setup( set_rotor_spd_t set_rotor_spd, get_recvr_channel_t get_recvr_channel );
-void flight_process( void );
+/**
+ * @brief		Initialise the flight controller.
+ */
+void flight_setup( set_rotor_spd_t set_rotor_spd,
+				   get_recvr_channel_t get_recvr_channel );
+
+/**
+ * @brief		Update the flight controller model.
+ */
+void flight_process( uint16_t timestep_ms, uint16_t *accel, uint16_t *gyro );
 
 #endif

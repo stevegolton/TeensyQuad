@@ -7,6 +7,7 @@
 #include "timers.h"
 #include "i2c.h"
 #include "flight.h"
+#include "SFE_LSM9DS0.h"
 
 // Define me if you want debugging, remove me for release!
 //#define configASSERT( x )     if( ( x ) == 0 ) { taskDISABLE_INTERRUPTS(); for( ;; ); }
@@ -286,7 +287,7 @@ static void taskhandler_flight( void *arg )
 		uart_puts( UART0_BASE_PTR, "\r\n" );
 
 		// Process flight controller
-		flight_process();
+		flight_process( 0, NULL, NULL );
 	}
 }
 
