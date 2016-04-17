@@ -124,14 +124,16 @@ int i2c_read_byte( const uint32_t channel_number,
 {
 	uint32_t status;
 	uint16_t init_sequence[] = { ( device << 1 ) | I2C_WRITING, addr, I2C_RESTART, ( device << 1 ) | I2C_READING, I2C_READ };
-	//uint8_t data = 0;        /* will contain the device id after sequence has been processed */
 
 	complete_flag = false;
 
 	status = i2c_send_sequence( channel_number, init_sequence, 5, data, my_callback_from_ISR, (void*)0x1234 );
 
-	/* Block until the I2C transaction has completed */
-	while ( false == complete_flag );
+	if ( 0 == status )
+	{
+		/* Block until the I2C transaction has completed */
+		while ( false == complete_flag );
+	}
 
 	return status;
 }
@@ -159,19 +161,36 @@ int i2c_read_bytes( const uint32_t channel_number,
 
 	status = i2c_send_sequence( channel_number, init_sequence, 4 + count, data, my_callback_from_ISR, (void*)0x1234 );
 
-	/* Block until the I2C transaction has completed */
-	while ( false == complete_flag );
+	if ( 0 == status )
+	{
+		/* Block until the I2C transaction has completed */
+		while ( false == complete_flag );
+	}
 
 	return status;
 }
 
-int i2c_wrie_byte( const uint32_t channel_number,
-				   const uint8_t device,
-				   const uint8_t addr,
-				   const uint8_t data )
+int i2c_write_byte( const uint32_t channel_number,
+					const uint8_t device,
+					const uint8_t addr,
+					const uint8_t data )
 {
+	uint32_t status;
+	uint16_t init_sequence[] = { ( device << 1 ) | I2C_WRITING, addr, I2C_RESTART, ( device << 1 ) | I2C_READING, data };
 
+	complete_flag = false;
+
+	status = i2c_send_sequence( channel_number, init_sequence, 5, NULL, my_callback_from_ISR, (void*)0x1234 );
+
+	if ( 0 == status )
+	{
+		/* Block until the I2C transaction has completed */
+		while ( false == complete_flag );
+	}
+
+	return status;
 }
+
 
 void I2C0_IRQHandler( void )
 {
