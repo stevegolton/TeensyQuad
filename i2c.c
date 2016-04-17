@@ -22,6 +22,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include "i2c.h"
 #include "common.h"
 #include "string.h"
@@ -133,6 +134,43 @@ int i2c_read_byte( const uint32_t channel_number,
 	while ( false == complete_flag );
 
 	return status;
+}
+
+int i2c_read_bytes( const uint32_t channel_number,
+					const uint8_t device,
+					const uint8_t addr,
+					uint8_t *const data,
+					size_t count )
+{
+	uint32_t status;
+	size_t index;
+	uint16_t init_sequence[] = { ( device << 1 ) | I2C_WRITING, addr, I2C_RESTART, ( device << 1 ) | I2C_READING };
+	uint16_t sequence[20];
+
+	memcpy( sequence, init_sequence, sizeof(init_sequence) );
+
+	// Fill in the number of reads we have been requested...
+	for ( index = 0; index < count; index++ )
+	{
+		sequence[4 + index] = I2C_READ;
+	}
+
+	complete_flag = false;
+
+	status = i2c_send_sequence( channel_number, init_sequence, 4 + count, data, my_callback_from_ISR, (void*)0x1234 );
+
+	/* Block until the I2C transaction has completed */
+	while ( false == complete_flag );
+
+	return status;
+}
+
+int i2c_wrie_byte( const uint32_t channel_number,
+				   const uint8_t device,
+				   const uint8_t addr,
+				   const uint8_t data )
+{
+
 }
 
 void I2C0_IRQHandler( void )

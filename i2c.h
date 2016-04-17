@@ -24,6 +24,7 @@
 #define I2C_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 /* Most Kinetis devices have only one I2C module, but for those that have more, set the number of devices here. */
 #define I2C_NUMBER_OF_DEVICES 1
@@ -94,6 +95,17 @@ int i2c_read_byte( const uint32_t channel_number,
 				   const uint8_t device,
 				   const uint8_t addr,
 				   uint8_t *const data );
+
+int i2c_read_bytes( const uint32_t channel_number,
+					const uint8_t device,
+					const uint8_t addr,
+					uint8_t *const data,
+					size_t count );
+
+int i2c_wrie_byte( const uint32_t channel_number,
+				   const uint8_t device,
+				   const uint8_t addr,
+				   const uint8_t data );
 
 #define I2C_RESTART 1<<8
 #define I2C_READ    2<<8

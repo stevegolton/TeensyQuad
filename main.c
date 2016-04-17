@@ -285,6 +285,8 @@ static void taskhandler_flight( void *arg )
 		uart_puts( UART0_BASE_PTR, buf );
 		uart_puts( UART0_BASE_PTR, "\r\n" );
 
+
+
 		// Process flight controller
 		flight_process( 0, NULL, NULL );
 	}
@@ -336,14 +338,20 @@ static void write_byte( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddres
 
 static uint8_t read_byte( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddress )
 {
+	uint8_t data;
+
 	uart_puts( UART0_BASE_PTR, "Reading byte\r\n" );
 
-	return 0;
+	i2c_read_byte( 0, address, subAddress, &data );
+
+	return data;
 }
 
 static void read_bytes( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddress, uint8_t * dest, uint8_t count )
 {
 	uart_puts( UART0_BASE_PTR, "Reading bytes\r\n" );
+
+	i2c_read_bytes( 0, address, subAddress, dest, count );
 
 	return;
 }
