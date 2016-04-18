@@ -102,10 +102,10 @@ int i2c_read_bytes( const uint32_t channel_number,
 					uint8_t *const data,
 					size_t count );
 
-int i2c_wrie_byte( const uint32_t channel_number,
-				   const uint8_t device,
-				   const uint8_t addr,
-				   const uint8_t data );
+int i2c_write_byte( const uint32_t channel_number,
+					const uint8_t device,
+					const uint8_t addr,
+					const uint8_t data );
 
 #define I2C_RESTART 1<<8
 #define I2C_READ    2<<8

@@ -165,12 +165,12 @@ int i2c_read_bytes( const uint32_t channel_number,
 	return status;
 }
 
-int i2c_wrie_byte( const uint32_t channel_number,
-				   const uint8_t device,
-				   const uint8_t addr,
-				   const uint8_t data )
+int i2c_write_byte( const uint32_t channel_number,
+					const uint8_t device,
+					const uint8_t addr,
+					const uint8_t data )
 {
-
+	return 0;
 }
 
 void I2C0_IRQHandler( void )
