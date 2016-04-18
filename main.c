@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdio.h>
 
 #include "common.h"
 #include "FreeRTOS.h"
@@ -208,7 +209,7 @@ char uart_getchar( const UART_MemMapPtr channel )
 	return UART_D_REG(channel);
 }
 
-/**100
+/**
  * @brief		Put a character into the tx buffer.
  * @param[in]	channel		UART module's base register pointer.
  * @param[in]	ch			Character to send.
@@ -222,6 +223,14 @@ static void uart_putchar( const UART_MemMapPtr channel, const char ch )
 	UART_D_REG(channel) = (uint8_t)ch;
 }
 
+
+int port_putchar( int c )
+{
+	uart_putchar( UART0_BASE_PTR, c );
+	return 1;
+}
+
+#if 0
 /**
  * @brief		Put a string into the tx buffer.
  * @param[in]	channel		UART module's base register pointer.
@@ -236,6 +245,7 @@ static void uart_puts( UART_MemMapPtr channel, const char *const s )
 		uart_putchar( channel, s[i] );
 	}
 }
+#endif
 
 /**
  * @brief		Blinks a number of times with a given interval.
@@ -265,31 +275,14 @@ static void blink( const int reps, const int period_ms )
  */
 static void taskhandler_flight( void *arg )
 {
-	char buf[16];
-	uint8_t checkbyte;
-
-	// Loop forever
 	for ( ;; )
 	{
+		// TODO: Replace with spart sleep
 		vTaskDelay( 1000 );
 
-#if 0
-		/* Read WHO_AM_I_G from LSM9DS0_G */
-		i2c_read_byte( 0, LSM9DS0_G, WHO_AM_I_G, &checkbyte );
+		LSM9DS0_readAccel( &lsm9dso_dvr );
 
-		printuint( buf, 16, checkbyte );
-		uart_puts( UART0_BASE_PTR, "Checkbyte = " );
-		uart_puts( UART0_BASE_PTR, buf );
-		uart_puts( UART0_BASE_PTR, "\r\n" );
-
-		/* Read WHO_AM_I_XM from LSM9DS0_XM */
-		i2c_read_byte( 0, LSM9DS0_XM, WHO_AM_I_XM, &checkbyte );
-
-		printuint( buf, 16, checkbyte );
-		uart_puts( UART0_BASE_PTR, "Checkbyte = " );
-		uart_puts( UART0_BASE_PTR, buf );
-		uart_puts( UART0_BASE_PTR, "\r\n" );
-#endif
+		printf( "Accel = %d, %d, %d\r\n", lsm9dso_dvr.ax, lsm9dso_dvr.ay, lsm9dso_dvr.az );
 
 		// Process flight controller
 		flight_process( 0, NULL, NULL );
@@ -312,7 +305,7 @@ static void taskhandler_comms( void *arg )
  */
 static void taskhandler_led( void *arg )
 {
-	uint16_t blink_sequence[] = { 600, 200, 300, 1200 };
+	uint16_t blink_sequence[] = { 500, 500 };
 	size_t sequence_position = 0;
 	size_t sequence_len = sizeof( blink_sequence ) / sizeof( blink_sequence[0] );
 	uint16_t sequence_ctr = 0;
@@ -364,38 +357,19 @@ static void timerCallback( TimerHandle_t xTimer )
 
 static void set_rotor_spd( const size_t rotor_number, const uint16_t spd )
 {
-#if 0
-	char buf[16];
-
-	uart_puts( UART0_BASE_PTR, "Set rotor " );
-	printuint( buf, 16, rotor_number );
-	uart_puts( UART0_BASE_PTR, buf );
-	uart_puts( UART0_BASE_PTR, " to " );
-	printuint( buf, 16, spd );
-	uart_puts( UART0_BASE_PTR, buf );
-	uart_puts( UART0_BASE_PTR, "\r\n" );
-#endif
-
+	//printf( "Set rotor spd %d = %d\r\n", rotor_number, spd );
 	return;
 }
 
 static uint16_t get_recvr_channel( const size_t channel_number )
 {
-#if 0
-	char buf[16];
-
-	uart_puts( UART0_BASE_PTR, "Get receiver " );
-	printuint( buf, 16, channel_number );
-	uart_puts( UART0_BASE_PTR, buf );
-	uart_puts( UART0_BASE_PTR, "\r\n" );
-#endif
+	//printf( "Get rxr %d\r\n", channel_number );
 	return 0;
 }
 
 static void write_byte( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddress, uint8_t data )
 {
-	uart_puts( UART0_BASE_PTR, "Writing byte\r\n" );
-
+	//printf( "I2Cwr %d>%d\r\n", subAddress, data );
 	i2c_write_byte( 0, address, subAddress, data );
 
 	return;
@@ -405,8 +379,7 @@ static uint8_t read_byte( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddr
 {
 	uint8_t data;
 
-	uart_puts( UART0_BASE_PTR, "Reading byte\r\n" );
-
+	//printf( "I2Crd %d\r\n", subAddress );
 	i2c_read_byte( 0, address, subAddress, &data );
 
 	return data;
@@ -414,8 +387,7 @@ static uint8_t read_byte( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddr
 
 static void read_bytes( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddress, uint8_t * dest, uint8_t count )
 {
-	uart_puts( UART0_BASE_PTR, "Reading bytes\r\n" );
-
+	//printf( "I2Crd %dx%d\r\n", subAddress, count );
 	i2c_read_bytes( 0, address, subAddress, dest, count );
 
 	return;
@@ -440,8 +412,8 @@ int main( void )
 	// to see a familiar sign before things start breaking!
 	blink( STARTUP_BLINK_COUNT, STARTUP_BLINK_PERIOD );
 
-	// Say hello!
-	uart_puts( UART0_BASE_PTR, "Hello, World!\r\n" );
+	// Say hello - printf is piped through the uart!
+	printf( "Hello, World!\r\n" );
 
 	LSM9DS0_begin( &lsm9dso_dvr );
 

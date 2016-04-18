@@ -36,5 +36,8 @@ void flight_process( uint16_t timestep_ms, uint16_t *accel, uint16_t *gyro )
 		_set_rotor_spd( motor_idx, 0 );
 	}
 
+	// Remove compiler warnings
+	if ( rcvr_values[0] );
+
 	return;
 }

@@ -146,10 +146,7 @@ int i2c_read_bytes( const uint32_t channel_number,
 {
 	uint32_t status;
 	size_t index;
-	uint16_t init_sequence[] = { ( device << 1 ) | I2C_WRITING, addr, I2C_RESTART, ( device << 1 ) | I2C_READING };
-	uint16_t sequence[20];
-
-	memcpy( sequence, init_sequence, sizeof(init_sequence) );
+	uint16_t sequence[12] = { ( device << 1 ) | I2C_WRITING, addr, I2C_RESTART, ( device << 1 ) | I2C_READING };
 
 	// Fill in the number of reads we have been requested...
 	for ( index = 0; index < count; index++ )
@@ -158,8 +155,7 @@ int i2c_read_bytes( const uint32_t channel_number,
 	}
 
 	complete_flag = false;
-
-	status = i2c_send_sequence( channel_number, init_sequence, 4 + count, data, my_callback_from_ISR, (void*)0x1234 );
+	status = i2c_send_sequence( channel_number, sequence, 4 + count, data, my_callback_from_ISR, (void*)0x1234 );
 
 	if ( 0 == status )
 	{
@@ -190,7 +186,6 @@ int i2c_write_byte( const uint32_t channel_number,
 
 	return status;
 }
-
 
 void I2C0_IRQHandler( void )
 {

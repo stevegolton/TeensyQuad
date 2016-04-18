@@ -42,6 +42,8 @@ int32_t			periph_clk_khz;
  */
 void start(void)
 {
+	// Stop compiler warning
+	extern int main( void );
 /*
  * Enable all of the port clocks. These have to be enabled to configure
  * pin muxing options, so most code will need all of these on anyway.
