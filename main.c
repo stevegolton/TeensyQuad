@@ -396,6 +396,8 @@ static void write_byte( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddres
 {
 	uart_puts( UART0_BASE_PTR, "Writing byte\r\n" );
 
+	i2c_write_byte( 0, address, subAddress, data );
+
 	return;
 }
 
