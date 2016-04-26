@@ -22,6 +22,7 @@ OBJECTS	= main.o \
 	      freertos/timers.o \
 	      freertos/heap_2.o \
 	      i2c.o \
+	      uart.o \
 	      flight.o \
 	      SFE_LSM9DS0.o \
 	      printf-stdarg.o \

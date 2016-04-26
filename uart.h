@@ -12,6 +12,7 @@
 #ifndef __UART_H__
 #define __UART_H__
 
+#include "common.h"
 
 /*
  *  These routines support access to all UARTs on the Teensy 3.x (K20).
@@ -23,11 +24,34 @@
  *
  *  To use a different UART as the active UART, call UARTAssignActiveUART().
  */
-void			UARTInit(uint32_t  uartnum, int32_t  baudrate);
-uint32_t		UARTAssignActiveUART(uint32_t  uartnum);
-int32_t			UARTWrite(const char *ptr, int32_t len);
-int32_t			UARTAvail(void);
-int32_t			UARTRead(char *ptr, int32_t len);
 
+/**
+ * @brief		Initialises the serial port module, baud rate=115200 8N1, hw
+ * 				flow control disabled.
+ * @param[in]	channel		UART module's base register pointer.
+ * @param[in]	baud		Baud rate in hz.
+ */
+void uart_init( const UART_MemMapPtr channel, const uint32_t baud );
+
+/**
+ * @brief		Get a character from the buffer.
+ * @param[in]	channel		UART module's base register pointer.
+ * @return		The character received from our FIFO.
+ */
+char uart_getchar( const UART_MemMapPtr channel );
+
+/**
+ * @brief		Put a character into the tx buffer.
+ * @param[in]	channel		UART module's base register pointer.
+ * @param[in]	ch			Character to send.
+ */
+void uart_putchar( const UART_MemMapPtr channel, const char c );
+
+/**
+ * @brief		Put a string into the tx buffer.
+ * @param[in]	channel		UART module's base register pointer.
+ * @param[in]	ch			Characters to send.
+ */
+void uart_puts( const UART_MemMapPtr channel, const char *const c );
 
 #endif /* __UART_H__ */

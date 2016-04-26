@@ -53,20 +53,6 @@
 #define PRDIV_VAL			8				/* PLL prescaler */
 #define VDIV_VAL			24				/* PLL multiplier */
 
-/*
- *  Optionally define the system console (one of the UARTs) for serial I/O.
- *  The value for TERM_PORT must be a UART base pointer, such as
- *  UART0_BASE_PTR.
- *  The value for TERMINAL_BAUD must be the baud rate, such as
- *  115200.
- *
- *  If your project does not include any of the UART drivers, these
- *  defines are meaningless and can be set to anything.
- */
-#define TERM_PORT           UART0_BASE_PTR
-#define TERMINAL_BAUD       115200
-
-
 extern  int32_t				mcg_clk_hz;		// following PLL init, holds actual MCG clock in Hz
 extern  int32_t				mcg_clk_khz;	// following PLL init, holds actual MCG clock in kHz
 extern  int32_t				core_clk_khz;	// following PLL init, holds actual core clock in kHz

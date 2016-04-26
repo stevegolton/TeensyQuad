@@ -13,7 +13,6 @@
 
 #include "common.h"
 #include "sysinit.h"
-#include "uart.h"
 
 /*
  *  Actual system clock frequencies, as determined by PLL following lock

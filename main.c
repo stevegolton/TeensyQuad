@@ -1,14 +1,13 @@
-#include <string.h>
-#include <stdio.h>
-
-#include "common.h"
-#include "FreeRTOS.h"
+#include <stdio.h>			/* printf)_ & friends */
+#include "common.h"			/* uC specific dfns */
+#include "FreeRTOS.h"		/* FreeRTOS */
 #include "FreeRTOSConfig.h"
 #include "portmacro.h"
 #include "timers.h"
-#include "i2c.h"
-#include "flight.h"
-#include "SFE_LSM9DS0.h"
+#include "i2c.h"			/* i2c ldd */
+#include "uart.h"			/* uart ldd */
+#include "SFE_LSM9DS0.h"	/* LSM9DS0 driver */
+#include "flight.h"			/* Flight controller */
 
 // Define me if you want debugging, remove me for release!
 //#define configASSERT( x )     if( ( x ) == 0 ) { taskDISABLE_INTERRUPTS(); for( ;; ); }
@@ -127,51 +126,7 @@ static void init_led( void )
 	GPIOC_PCOR = ( 1 << 5 );			// start with LED off
 }
 
-/**
- * @brief		Initialises the serial port module, baud rate=115200 8N1, hw
- * 				flow control disabled.
- * @param[in]	channel		UART module's base register pointer.
- */
-void init_serial( const UART_MemMapPtr channel )
-{
-	int baud = 115200;
-	register uint16_t ubd, brfa;
-	uint8_t temp;
 
-	// Initialise serial port pins
-	PORTB_PCR16 = PORT_PCR_MUX( 0x3 );
-	PORTB_PCR17 = PORT_PCR_MUX( 0x3 );
-
-	/* Enable the clock to UART0 */
-	SIM_SCGC4 |= SIM_SCGC4_UART0_MASK;
-
-	/* Make sure that the transmitter and receiver are disabled while we
-	* change settings.
-	*/
-	UART_C2_REG( channel ) &= ~( UART_C2_TE_MASK | UART_C2_RE_MASK );
-
-	/* Configure the UART for 8-bit mode, no parity */
-	/* We need all default settings, so entire register is cleared */
-	UART_C1_REG( channel ) = 0;
-
-	/* Calculate baud settings */
-	ubd = (uint16_t)( ( mcg_clk_khz * 1000)/( baud * 16 ) );
-
-	/* Save off the current value of the UARTx_BDH except for the SBR */
-	temp = UART_BDH_REG( channel ) & ~( UART_BDH_SBR( 0x1F ) );
-	UART_BDH_REG( channel ) = temp | UART_BDH_SBR( ( ( ubd & 0x1F00 ) >> 8 ) );
-	UART_BDL_REG( channel ) = (uint8_t)( ubd & UART_BDL_SBR_MASK );
-
-	/* Determine if a fractional divider is needed to get closer to the baud rate */
-	brfa = ( ( ( mcg_clk_khz * 32000 ) / ( baud * 16 ) ) - ( ubd * 32 ) );
-
-	/* Save off the current value of the UARTx_C4 register except for the BRFA */
-	temp = UART_C4_REG( channel ) & ~( UART_C4_BRFA( 0x1F ) );
-	UART_C4_REG( channel ) = temp | UART_C4_BRFA( brfa );
-
-	/* Enable receiver and transmitter */
-	UART_C2_REG( channel ) |= ( UART_C2_TE_MASK | UART_C2_RE_MASK );
-}
 
 void init_i2c( void )
 {
@@ -195,57 +150,11 @@ void init_i2c( void )
 	i2c_init( 0, 0x01, 0x20 );
 }
 
-/**
- * @brief		Get a character from the buffer.
- * @param[in]	channel		UART module's base register pointer.
- * @return		The character received from our FIFO.
- */
-char uart_getchar( const UART_MemMapPtr channel )
-{
-	/* Wait until character has been received */
-	while (!(UART_S1_REG(channel) & UART_S1_RDRF_MASK));
-
-	/* Return the 8-bit data from the receiver */
-	return UART_D_REG(channel);
-}
-
-/**
- * @brief		Put a character into the tx buffer.
- * @param[in]	channel		UART module's base register pointer.
- * @param[in]	ch			Character to send.
- */
-static void uart_putchar( const UART_MemMapPtr channel, const char ch )
-{
-	/* Wait until space is available in the FIFO */
-	while(!(UART_S1_REG(channel) & UART_S1_TDRE_MASK));
-
-	/* Send the character */
-	UART_D_REG(channel) = (uint8_t)ch;
-}
-
-
 int port_putchar( int c )
 {
-	uart_putchar( UART0_BASE_PTR, c );
+	uart_putchar( UART0_BASE_PTR, (char)c );
 	return 1;
 }
-
-#if 0
-/**
- * @brief		Put a string into the tx buffer.
- * @param[in]	channel		UART module's base register pointer.
- * @param[in]	ch			Characters to send.
- */
-static void uart_puts( UART_MemMapPtr channel, const char *const s )
-{
-	int i;
-
-	for ( i = 0; i < strlen( s ); i++ )
-	{
-		uart_putchar( channel, s[i] );
-	}
-}
-#endif
 
 /**
  * @brief		Blinks a number of times with a given interval.
@@ -401,7 +310,7 @@ int main( void )
 {
 	// Initialise hardware and peripherals
 	init_led();
-	init_serial( UART0_BASE_PTR );
+	uart_init( UART0_BASE_PTR, 115200 );
 	init_i2c();
 
 	// Initialise LSM driver and flight controller
