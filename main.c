@@ -59,63 +59,6 @@ void HardFault_Handler()
 }
 
 /**
- * @brief		If enabled, this hook will be called in case of a stack
- * 				overflow.
- * @param[in]	pxTask		Task handle.
- * @param[in]	pcTaskName	Pointer to task name.
- */
-void vApplicationStackOverflowHook( xTaskHandle pxTask, char *pcTaskName )
-{
-	/* This will get called if a stack overflow is detected during the context
-	 switch.  Set configCHECK_FOR_STACK_OVERFLOWS to 2 to also check for stack
-	 problems within nested interrupts, but only do this for debug purposes as
-	 it will increase the context switch time. */
-	(void)pxTask;
-	(void)pcTaskName;
-	taskDISABLE_INTERRUPTS();
-	/* Write your code here ... */
-	for(;;) {}
-}
-
-/**
- * @brief		If enabled, this hook will be called by the RTOS for every
- *				tick increment.
- */
-void vApplicationTickHook( void )
-{
-	/* Called for every RTOS tick. */
-	/* Write your code here ... */
-}
-
-/**
- * @brief		If enabled, this hook will be called when the RTOS is idle.
- *				This might be a good place to go into low power mode.
- */
-void vApplicationIdleHook( void )
-{
-	/* Called whenever the RTOS is idle (from the IDLE task).
-	 Here would be a good place to put the CPU into low power mode. */
-	/* Write your code here ... */
-}
-
-/**
- * @brief		If enabled, the RTOS will call this hook in case memory
- *				allocation failed.
- */
-void vApplicationMallocFailedHook( void )
-{
-	/* Called if a call to pvPortMalloc() fails because there is insufficient
-	 free memory available in the FreeRTOS heap.  pvPortMalloc() is called
-	 internally by FreeRTOS API functions that create tasks, queues, software
-	 timers, and semaphores.  The size of the FreeRTOS heap is set by the
-	 configTOTAL_HEAP_SIZE configuration constant in FreeRTOSConfig.h. */
-	taskDISABLE_INTERRUPTS();
-	/* Write your code here ... */
-	for(;;) {}
-}
-
-
-/**
  * @brief		Initialises the onboard LED.
  */
 static void init_led( void )
@@ -179,6 +122,66 @@ static void blink( const int reps, const int period_ms )
 }
 
 /**
+ * @brief		If enabled, this hook will be called in case of a stack
+ * 				overflow.
+ * @param[in]	pxTask		Task handle.
+ * @param[in]	pcTaskName	Pointer to task name.
+ */
+void vApplicationStackOverflowHook( xTaskHandle pxTask, char *pcTaskName )
+{
+	/* This will get called if a stack overflow is detected during the context
+	 switch.  Set configCHECK_FOR_STACK_OVERFLOWS to 2 to also check for stack
+	 problems within nested interrupts, but only do this for debug purposes as
+	 it will increase the context switch time. */
+	(void)pxTask;
+	(void)pcTaskName;
+	taskDISABLE_INTERRUPTS();
+	/* Write your code here ... */
+	//for(;;) {}
+	while ( 1 )
+	{
+		blink( 1, 100 );
+	}
+}
+
+/**
+ * @brief		If enabled, this hook will be called by the RTOS for every
+ *				tick increment.
+ */
+void vApplicationTickHook( void )
+{
+	/* Called for every RTOS tick. */
+	/* Write your code here ... */
+}
+
+/**
+ * @brief		If enabled, this hook will be called when the RTOS is idle.
+ *				This might be a good place to go into low power mode.
+ */
+void vApplicationIdleHook( void )
+{
+	/* Called whenever the RTOS is idle (from the IDLE task).
+	 Here would be a good place to put the CPU into low power mode. */
+	/* Write your code here ... */
+}
+
+/**
+ * @brief		If enabled, the RTOS will call this hook in case memory
+ *				allocation failed.
+ */
+void vApplicationMallocFailedHook( void )
+{
+	/* Called if a call to pvPortMalloc() fails because there is insufficient
+	 free memory available in the FreeRTOS heap.  pvPortMalloc() is called
+	 internally by FreeRTOS API functions that create tasks, queues, software
+	 timers, and semaphores.  The size of the FreeRTOS heap is set by the
+	 configTOTAL_HEAP_SIZE configuration constant in FreeRTOSConfig.h. */
+	taskDISABLE_INTERRUPTS();
+	/* Write your code here ... */
+	for(;;) {}
+}
+
+/**
  * @brief		Runs recursive flight processing.
  * @param[in]	arg		Opaque pointer to our user data.
  */
@@ -186,15 +189,33 @@ static void taskhandler_flight( void *arg )
 {
 	for ( ;; )
 	{
-		// TODO: Replace with spart sleep
-		vTaskDelay( 1000 );
-
+		/* Read the latest accel and gyro values */
 		LSM9DS0_readAccel( &lsm9dso_dvr );
+		LSM9DS0_readGyro( &lsm9dso_dvr );
 
-		printf( "Accel = %d, %d, %d\r\n", lsm9dso_dvr.ax, lsm9dso_dvr.ay, lsm9dso_dvr.az );
+		/* Print accel and gyro to the command line * 1000 */
+		printf( "Accel = %d, %d, %d\r\n",
+				(int)(LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.ax )*1000),
+				(int)(LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.ay )*1000),
+				(int)(LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.az )*1000) );
 
+
+		printf( "Gyro = %x, %x, %x\r\n",
+				lsm9dso_dvr.gx,
+				lsm9dso_dvr.gy,
+				lsm9dso_dvr.gz );
+
+/*
+		printf( "Gyro = %d, %d, %d\r\n",
+				(int)(LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gx )*1000),
+				(int)(LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gy )*1000),
+				(int)(LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gz )*1000) );
+*/
 		// Process flight controller
 		flight_process( 0, NULL, NULL );
+
+		// TODO: Replace with smart sleep using timer
+		vTaskDelay( 1000 );
 	}
 }
 
@@ -296,8 +317,16 @@ static uint8_t read_byte( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddr
 
 static void read_bytes( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddress, uint8_t * dest, uint8_t count )
 {
-	//printf( "I2Crd %dx%d\r\n", subAddress, count );
+	int i;
+
 	i2c_read_bytes( 0, address, subAddress, dest, count );
+
+	for ( i = 0; i < count; i++ )
+	{
+		printf( "%x", dest[i] );
+		//i2c_read_byte( 0, address, subAddress, &dest[i] );
+	}
+	printf( "\r\n" );
 
 	return;
 }
@@ -329,7 +358,7 @@ int main( void )
 	// Create our flight task
 	xTaskCreate( taskhandler_flight,			// The task's callback function
 				 "Flight",						// Task name
-				 configMINIMAL_STACK_SIZE,		// We can specify different stack sizes for each task? Cool!
+				 500,							// Make the flight controller's stack large as we are likely to do many function calls
 				 NULL,							// Parameter to pass to the callback function, we have nothhing to pass..
 				 2,								// Priority, this is our only task so.. lets just use 0
 				 NULL );						// We could put a pointer to a task handle here which will be filled in when the task is created

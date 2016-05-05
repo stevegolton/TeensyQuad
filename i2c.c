@@ -146,16 +146,18 @@ int i2c_read_bytes( const uint32_t channel_number,
 {
 	uint32_t status;
 	size_t index;
-	uint16_t sequence[12] = { ( device << 1 ) | I2C_WRITING, addr, I2C_RESTART, ( device << 1 ) | I2C_READING };
+	uint16_t sequence[20] = { ( device << 1 ) | I2C_WRITING, addr, I2C_RESTART, ( device << 1 ) | I2C_READING };
+	uint8_t offset = 4;
 
 	// Fill in the number of reads we have been requested...
 	for ( index = 0; index < count; index++ )
 	{
-		sequence[4 + index] = I2C_READ;
+		sequence[offset] = I2C_READ;
+		offset++;
 	}
 
 	complete_flag = false;
-	status = i2c_send_sequence( channel_number, sequence, 4 + count, data, my_callback_from_ISR, (void*)0x1234 );
+	status = i2c_send_sequence( channel_number, sequence, offset, data, my_callback_from_ISR, (void*)0x1234 );
 
 	if ( 0 == status )
 	{

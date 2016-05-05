@@ -19,6 +19,6 @@ void flight_setup( set_rotor_spd_t set_rotor_spd,
 /**
  * @brief		Update the flight controller model.
  */
-void flight_process( uint16_t timestep_ms, uint16_t *accel, uint16_t *gyro );
+void flight_process( uint16_t timestep_ms, int16_t *accel, int16_t *gyro );
 
 #endif

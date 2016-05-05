@@ -794,8 +794,15 @@ static void xmReadBytes(stLSM9DS0_t * stThis, uint8_t subAddress, uint8_t * dest
 {
 	// Whether we're using I2C or SPI, read multiple bytes using the
 	// accelerometer-specific I2C address or SPI CS pin.
+
+	/* From page 33 of the LSM9DS0 "In order to read multiple bytes, it is
+	 * necessary to assert the most significant bit of the subaddress field. In
+	 * other words, SUB(7) must be equal to 1 while SUB(6-0) represents the
+	 * address of first register to be read."
+	 * Therefore we OR the subaddress with 0x80!
+	 * */
 	if (stThis->interfaceMode == MODE_I2C)
-		stThis->read_bytes(stThis, stThis->xmAddress, subAddress, dest, count);
+		stThis->read_bytes(stThis, stThis->xmAddress, ( subAddress | 0x80 ), dest, count);
 	else if (stThis->interfaceMode == MODE_SPI)
 		SPIreadBytes(stThis, stThis->xmAddress, subAddress, dest, count);
 }
