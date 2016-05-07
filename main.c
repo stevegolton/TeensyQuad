@@ -199,23 +199,16 @@ static void taskhandler_flight( void *arg )
 				(int)(LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.ay )*1000),
 				(int)(LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.az )*1000) );
 
-
-		printf( "Gyro = %x, %x, %x\r\n",
-				lsm9dso_dvr.gx,
-				lsm9dso_dvr.gy,
-				lsm9dso_dvr.gz );
-
-/*
 		printf( "Gyro = %d, %d, %d\r\n",
 				(int)(LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gx )*1000),
 				(int)(LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gy )*1000),
 				(int)(LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gz )*1000) );
-*/
+
 		// Process flight controller
 		flight_process( 0, NULL, NULL );
 
 		// TODO: Replace with smart sleep using timer
-		vTaskDelay( 1000 );
+		vTaskDelay( 200 );
 	}
 }
 
@@ -309,7 +302,6 @@ static uint8_t read_byte( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddr
 {
 	uint8_t data;
 
-	//printf( "I2Crd %d\r\n", subAddress );
 	i2c_read_byte( 0, address, subAddress, &data );
 
 	return data;
@@ -317,16 +309,7 @@ static uint8_t read_byte( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddr
 
 static void read_bytes( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddress, uint8_t * dest, uint8_t count )
 {
-	int i;
-
 	i2c_read_bytes( 0, address, subAddress, dest, count );
-
-	for ( i = 0; i < count; i++ )
-	{
-		printf( "%x", dest[i] );
-		//i2c_read_byte( 0, address, subAddress, &dest[i] );
-	}
-	printf( "\r\n" );
 
 	return;
 }

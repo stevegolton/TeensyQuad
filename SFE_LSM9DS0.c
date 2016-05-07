@@ -161,6 +161,31 @@ static void SPIreadBytes(stLSM9DS0_t * stThis,uint8_t csPin, uint8_t subAddress,
 // This function will setup all I2C pins and related hardware.
 static void initI2C(stLSM9DS0_t * stThis);
 
+// I2CwriteByte() -- Write a byte out of I2C to a register in the device
+// Input:
+//	- address = The 7-bit I2C address of the slave device.
+//	- subAddress = The register to be written to.
+//	- data = Byte to be written to the register.
+static void I2CwriteByte(stLSM9DS0_t * stThis,uint8_t address, uint8_t subAddress, uint8_t data);
+
+// I2CreadByte() -- Read a single byte from a register over I2C.
+// Input:
+//	- address = The 7-bit I2C address of the slave device.
+//	- subAddress = The register to be read from.
+// Output:
+//	- The byte read from the requested address.
+static uint8_t I2CreadByte(stLSM9DS0_t * stThis,uint8_t address, uint8_t subAddress);
+
+// I2CreadBytes() -- Read a series of bytes, starting at a register via SPI
+// Input:
+//	- address = The 7-bit I2C address of the slave device.
+//	- subAddress = The register to begin reading.
+// 	- * dest = Pointer to an array where we'll store the readings.
+//	- count = Number of registers to be read.
+// Output: No value is returned by the function, but the registers read are
+// 		all stored in the *dest array given.
+static void I2CreadBytes(stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddress, uint8_t * dest, uint8_t count);
+
 static void wait( uint16_t millis );
 
 /* ************************************************************************** **
@@ -740,7 +765,7 @@ static void gWriteByte(stLSM9DS0_t * stThis, uint8_t subAddress, uint8_t data)
 	// Whether we're using I2C or SPI, write a byte using the
 	// gyro-specific I2C address or SPI CS pin.
 	if (stThis->interfaceMode == MODE_I2C)
-		stThis->write_byte(stThis, stThis->gAddress, subAddress, data);
+		I2CwriteByte( stThis, stThis->gAddress, subAddress, data );
 	else if (stThis->interfaceMode == MODE_SPI)
 		SPIwriteByte(stThis, stThis->gAddress, subAddress, data);
 }
@@ -751,7 +776,7 @@ static void xmWriteByte(stLSM9DS0_t * stThis, uint8_t subAddress, uint8_t data)
 	// Whether we're using I2C or SPI, write a byte using the
 	// accelerometer-specific I2C address or SPI CS pin.
 	if (stThis->interfaceMode == MODE_I2C)
-		return stThis->write_byte(stThis, stThis->xmAddress, subAddress, data);
+		I2CwriteByte( stThis, stThis->xmAddress, subAddress, data );
 	else if (stThis->interfaceMode == MODE_SPI)
 		return SPIwriteByte(stThis, stThis->xmAddress, subAddress, data);
 }
@@ -762,9 +787,11 @@ static uint8_t gReadByte(stLSM9DS0_t * stThis, uint8_t subAddress)
 	// Whether we're using I2C or SPI, read a byte using the
 	// gyro-specific I2C address or SPI CS pin.
 	if (stThis->interfaceMode == MODE_I2C)
-		return stThis->read_byte(stThis, stThis->gAddress, subAddress);
+		return I2CreadByte( stThis, stThis->gAddress, subAddress );
 	else if (stThis->interfaceMode == MODE_SPI)
 		return SPIreadByte(stThis, stThis->gAddress, subAddress);
+	else
+		return 0;
 }
 
 /* ************************************************************************** */
@@ -773,7 +800,7 @@ static void gReadBytes(stLSM9DS0_t * stThis, uint8_t subAddress, uint8_t * dest,
 	// Whether we're using I2C or SPI, read multiple bytes using the
 	// gyro-specific I2C address or SPI CS pin.
 	if (stThis->interfaceMode == MODE_I2C)
-		stThis->read_bytes(stThis, stThis->gAddress, subAddress, dest, count);
+		I2CreadBytes( stThis, stThis->gAddress, subAddress, dest, count );
 	else if (stThis->interfaceMode == MODE_SPI)
 		SPIreadBytes(stThis, stThis->gAddress, subAddress, dest, count);
 }
@@ -784,9 +811,11 @@ static uint8_t xmReadByte(stLSM9DS0_t * stThis, uint8_t subAddress)
 	// Whether we're using I2C or SPI, read a byte using the
 	// accelerometer-specific I2C address or SPI CS pin.
 	if (stThis->interfaceMode == MODE_I2C)
-		return stThis->read_byte(stThis, stThis->xmAddress, subAddress);
+		return I2CreadByte( stThis, stThis->xmAddress, subAddress );
 	else if (stThis->interfaceMode == MODE_SPI)
 		return SPIreadByte(stThis, stThis->xmAddress, subAddress);
+	else
+		return 0;
 }
 
 /* ************************************************************************** */
@@ -802,7 +831,7 @@ static void xmReadBytes(stLSM9DS0_t * stThis, uint8_t subAddress, uint8_t * dest
 	 * Therefore we OR the subaddress with 0x80!
 	 * */
 	if (stThis->interfaceMode == MODE_I2C)
-		stThis->read_bytes(stThis, stThis->xmAddress, ( subAddress | 0x80 ), dest, count);
+		I2CreadBytes( stThis, stThis->xmAddress, subAddress, dest, count );
 	else if (stThis->interfaceMode == MODE_SPI)
 		SPIreadBytes(stThis, stThis->xmAddress, subAddress, dest, count);
 }
@@ -877,6 +906,30 @@ static void SPIreadBytes(stLSM9DS0_t * stThis, uint8_t csPin, uint8_t subAddress
 static void initI2C(stLSM9DS0_t * stThis)
 {
 	// I2C library initialisation already done!
+}
+
+/* ************************************************************************** */
+static void I2CwriteByte(stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddress, uint8_t data)
+{
+	stThis->write_byte( stThis, address, subAddress, data );
+}
+
+/* ************************************************************************** */
+static uint8_t I2CreadByte(stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddress)
+{
+	uint8_t data = 0; // `data` will store the register data
+
+	data = stThis->read_byte( stThis, address, subAddress );
+
+	return data;                             // Return data read from slave register
+}
+
+/* ************************************************************************** */
+static void I2CreadBytes(stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddress, uint8_t * dest, uint8_t count)
+{
+	uint8_t registerAddress = (uint8_t)(subAddress | 0x80);
+
+	stThis->read_bytes(stThis, address, registerAddress, dest, count);
 }
 
 static void wait( uint16_t millis )
