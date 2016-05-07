@@ -3,6 +3,7 @@
 
 #include "flight.h"
 #include "common.h"
+#include "vector3f.h"
 
 static set_rotor_spd_t _set_rotor_spd;
 static get_recvr_channel_t _get_recvr_channel;
@@ -16,7 +17,7 @@ void flight_setup( set_rotor_spd_t set_rotor_spd, get_recvr_channel_t get_recvr_
 	return;
 }
 
-void flight_process( uint16_t timestep_ms, int16_t *accel, int16_t *gyro )
+void flight_process( uint16_t timestep_ms, vector3f_t accel, vector3f_t gyro )
 {
 	int rcvr_idx;
 	uint16_t rcvr_values[NUM_RCVR_CHANNELS];

@@ -8,6 +8,7 @@
 #include "uart.h"			/* uart ldd */
 #include "SFE_LSM9DS0.h"	/* LSM9DS0 driver */
 #include "flight.h"			/* Flight controller */
+#include "vector3f.h"		/* vector3f_t */
 
 // Define me if you want debugging, remove me for release!
 //#define configASSERT( x )     if( ( x ) == 0 ) { taskDISABLE_INTERRUPTS(); for( ;; ); }
@@ -68,8 +69,6 @@ static void init_led( void )
 	GPIOC_PDDR = ( 1 << 5 );			// make this an output pin
 	GPIOC_PCOR = ( 1 << 5 );			// start with LED off
 }
-
-
 
 void init_i2c( void )
 {
@@ -187,11 +186,22 @@ void vApplicationMallocFailedHook( void )
  */
 static void taskhandler_flight( void *arg )
 {
+	vector3f_t accel;
+	vector3f_t gyro;
+
 	for ( ;; )
 	{
 		/* Read the latest accel and gyro values */
 		LSM9DS0_readAccel( &lsm9dso_dvr );
 		LSM9DS0_readGyro( &lsm9dso_dvr );
+
+		accel.x = LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.ax );
+		accel.y = LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.ay );
+		accel.z = LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.az );
+
+		gyro.x = LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.gx );
+		gyro.y = LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.gy );
+		gyro.z = LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.gz );
 
 		/* Print accel and gyro to the command line * 1000 */
 		printf( "Accel = %d, %d, %d\r\n",
@@ -205,7 +215,7 @@ static void taskhandler_flight( void *arg )
 				(int)(LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gz )*1000) );
 
 		// Process flight controller
-		flight_process( 0, NULL, NULL );
+		flight_process( 200, accel, gyro );
 
 		// TODO: Replace with smart sleep using timer
 		vTaskDelay( 200 );
