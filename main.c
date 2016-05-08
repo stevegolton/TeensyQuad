@@ -21,9 +21,24 @@
 
 #define LED_TICK_MS				( 100UL )
 
+// FTM divider settings
+#define FTM_FC_PS_DIV_1 0
+#define FTM_FC_PS_DIV_2 1
+#define FTM_FC_PS_DIV_4 2
+#define FTM_FC_PS_DIV_8 3
+#define FTM_FC_PS_DIV_16 4
+#define FTM_FC_PS_DIV_32 5
+#define FTM_FC_PS_DIV_64 6
+#define FTM_FC_PS_DIV_128 7
+
+#define FTM_MODULO		36000
+
 static stLSM9DS0_t lsm9dso_dvr;
 static TimerHandle_t led_timer = NULL;
 static TaskHandle_t led_task = NULL;
+
+static uint16_t recvr_rising[6];
+static uint16_t recvr_ontime[6];
 
 /**
  * @brief		Delay using a loop. Milliseconds are very approximate based on
@@ -214,11 +229,13 @@ static void taskhandler_flight( void *arg )
 				(int)(LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gy )*1000),
 				(int)(LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gz )*1000) );
 
+		printf( "Receiver input = %d\r\n", recvr_ontime[0] );
+
 		// Process flight controller
 		flight_process( 200, accel, gyro );
 
 		// TODO: Replace with smart sleep using timer
-		vTaskDelay( 200 );
+		vTaskDelay( 500 );
 	}
 }
 
@@ -325,6 +342,101 @@ static void read_bytes( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddres
 }
 
 /**
+ * @brief		Initialise the FTM module for PWM and Input Capture.
+ *
+ * This is a bit cheeky, this setup should be made more generalized for the
+ * FTM and should be placed into a
+ */
+static void init_ftm0( void )
+{
+	/* SIM_SCGC6: FTM0=1 - Enable FTM module clock (also set this otherwise hard fault... I don't know why!) */
+	SIM_SCGC6 |= SIM_SCGC6_FTM0_MASK;
+
+	/* FTM0_MODE:FAULTIE=0,FAULTM=0,CAPTEST=0,PWMSYNC=0,WPDIS=1,INIT=0,FTMEN=0 */
+	FTM0_MODE = (FTM_MODE_FAULTM(0x00) | FTM_MODE_WPDIS_MASK); /* Set up mode register */
+
+	/* Turn off the module completely */
+	/* FTM0_SC: TOF=0,TOIE=0,CPWMS=0,CLKS=0,PS=0 */
+	FTM0_SC = (FTM_SC_CLKS(0x00) | FTM_SC_PS(0x00)); /* Clear status and control register turning the module off */
+	FTM0_CNTIN = FTM_CNTIN_INIT( 0x00 );	/* Clear initial counter register */
+
+	/* Set up FTM0's modulo register - this is the value at which it will wrap when counting */
+	FTM0_MOD = FTM_MOD_MOD( FTM_MODULO );
+
+	/* FTM0 CH0 - Configure for PWM */
+	//FTM0_C0SC = ( FTM_CnSC_MSB_MASK | FTM_CnSC_ELSA_MASK );		/* Set up channel 0 status and control register to be a PWM channel, edge aligned, starts high becomes low after match */
+	//FTM0_C0V = FTM_CnV_VAL( 24000 );							/* Set up channel 0 value register */
+
+	/* FTM0 CH4 - Configure for input capture */
+	FTM0_C4SC = ( FTM_CnSC_ELSA_MASK | FTM_CnSC_ELSB_MASK | FTM_CnSC_CHIE_MASK );	// Configure the channel 1 mode register by turning on the rising edge, falling edge and interrupt enable modes
+
+	/* Set up Initial State for Channel Output register */
+	FTM0_OUTINIT = FTM_OUTINIT_CH0OI_MASK;
+
+	/* FTM0_MODE: FAULTIE=0,FAULTM=0,CAPTEST=0,PWMSYNC=0,WPDIS=1,INIT=1,FTMEN=0 */
+	FTM0_MODE = (FTM_MODE_FAULTM(0x00) | FTM_MODE_WPDIS_MASK | FTM_MODE_INIT_MASK); /* Initialise the Output Channels */
+
+	// Enable interrupt in NVIC and set priority to 0 */
+	NVICICPR1 |= ( 1 << 30 );
+	NVICISER1 |= ( 1 << 30 );
+	NVICIP62 = 0x00;
+
+	/* Turn FTM0 on setting up the clock divider to 128 */
+	/* FTM0_SC: TOF=0,TOIE=0,CPWMS=0,CLKS=1,PS=0 */
+	FTM0_SC = ( FTM_SC_CLKS( 0x01 ) | FTM_SC_PS( FTM_FC_PS_DIV_4 ) | FTM_SC_TOIE_MASK ); /* Set up status and control register */
+
+	// Set up PTD4 (Teensy pin 6) as FTM0 output 0 (alt = 4).
+	// Port mapping on page 225 of the user K20 manual
+	PORTD_PCR4 = PORT_PCR_MUX( 0x4 );
+}
+
+/**
+ * @brief		Called on an FTM interrupt.
+ *
+ * This function is referenced by name in the vector table in crt0.s and so is
+ * called under any FTM0 interrupt. This may include channel interrupts and
+ * overflow interrupts if they are configured. Here we check for both.
+ */
+void FTM0_IRQHandler( void )
+{
+	uint16_t now;
+
+	// First of all we need to tell which interrupt just happened by checking
+	// the appropriate interrupt flag.
+	if ( FTM0_C4SC & FTM_CnSC_CHF_MASK )
+	{
+		// We must clear the interrupt flag here
+		FTM0_C4SC &= ~FTM_CnSC_CHF_MASK;
+
+		// Check the state of out input pin and report over serial
+		if ( GPIOD_PDIR & ( 0x1 << 4 ) )
+		{
+			// Rising edge
+			recvr_rising[0] = FTM0_C4V;
+		}
+		else
+		{
+			// Falling edge
+			now = FTM0_C4V;
+
+			if ( now < recvr_rising[0] )
+			{
+				now += FTM_MODULO;
+			}
+
+			recvr_ontime[0] = ( now - recvr_rising[0] );
+		}
+	}
+
+	/* Check for overflow interrupt */
+	if ( FTM0_SC & FTM_SC_TOF_MASK )
+	{
+		/* Clear mask */
+		FTM0_SC &= ~FTM_SC_TOF_MASK;
+	}
+}
+
+/**
 ** @brief		Entry point to program.
 ** @return		Error code.
 */
@@ -334,6 +446,7 @@ int main( void )
 	init_led();
 	uart_init( UART0_BASE_PTR, 115200 );
 	init_i2c();
+	init_ftm0();
 
 	// Initialise LSM driver and flight controller
 	LSM9DS0_Setup( &lsm9dso_dvr, MODE_I2C, LSM9DS0_G, LSM9DS0_XM, write_byte, read_byte, read_bytes );
