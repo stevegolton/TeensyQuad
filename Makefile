@@ -26,6 +26,7 @@ OBJECTS	= main.o \
 	      flight.o \
 	      SFE_LSM9DS0.o \
 	      printf-stdarg.o \
+	      io_driver.o \
 
 #  Select the toolchain by providing a path to the top level
 #  directory; this will be the folder that holds the

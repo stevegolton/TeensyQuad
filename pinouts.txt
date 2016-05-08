@@ -1,0 +1,19 @@
+Function	| K20 Pin	| Teensy3.1 Pin
+---------------------------------------
+M0			| PTC1		| 			22 |
+M1			| PTC2		| 			23 |
+M2			| PTC3		| 			 9 |
+M3			| PTC4		| 			10 |
+RX0			| PTD4		| 			 6 |
+RX1			| PTD5		| 			20 |
+RX2			| PTD6		| 			21 |
+RX3			| PTD7		| 			 5 |
+RX4			| PTA12		| 			 3 |
+RX5			| PTA13		| 			 4 |
+ESP-UART-RX	| PTB16		|			 0 |
+ESP-UART-TX	| PTB17		|			 1 |
+GXM-SCL		| PTB2		|			19 |
+GXM-SDA		| PTB3		|			18 |
+INTG		|
+INT1XM		|
+INT2XM		|
