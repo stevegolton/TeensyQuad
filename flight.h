@@ -15,7 +15,8 @@ typedef uint16_t (*get_recvr_channel_t)( const size_t channel_number );
  * @brief		Initialise the flight controller.
  */
 void flight_setup( set_rotor_spd_t set_rotor_spd,
-				   get_recvr_channel_t get_recvr_channel );
+				   get_recvr_channel_t get_recvr_channel,
+				   int16_t receiver_max );
 
 /**
  * @brief		Update the flight controller model.

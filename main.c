@@ -305,7 +305,15 @@ static void set_rotor_spd( const size_t rotor_number, const uint16_t spd )
 
 static uint16_t get_recvr_channel( const size_t channel_number )
 {
-	//printf( "Get rxr %d\r\n", channel_number );
+	uint32_t value;
+
+	return 0;
+
+	if ( 0 != IODRIVER_GetInputPulseWidth( channel_number, &value ) )
+	{
+		return value - RECEIVER_FLOOR;
+	}
+
 	return 0;
 }
 
@@ -339,15 +347,24 @@ static void read_bytes( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddres
 */
 int main( void )
 {
-	// Initialise hardware and peripherals
+	// Initialise the Teensy's on-board LED
 	init_led();
+
+	// Initialise the UART module for comms with the ESP module
 	uart_init( UART0_BASE_PTR, 115200 );
-	init_i2c();
+
+	// The IO driver handles setting up the FTM for receiver inputs and motor
+	// outputs
 	IODRIVER_Setup();
+
+	// Initialise I2C which is used to talk to the LSM9DS0 IMU module
+	init_i2c();
 
 	// Initialise LSM driver and flight controller
 	LSM9DS0_Setup( &lsm9dso_dvr, MODE_I2C, LSM9DS0_G, LSM9DS0_XM, write_byte, read_byte, read_bytes );
-	flight_setup( set_rotor_spd, get_recvr_channel );
+
+	// Initialise the flight controller module
+	flight_setup( set_rotor_spd, get_recvr_channel, ( RECEIVER_CEIL - RECEIVER_FLOOR ) );
 
 	// Flash a little startup sequence, this isn't necessary at all, just nice
 	// to see a familiar sign before things start breaking!
