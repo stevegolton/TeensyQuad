@@ -58,6 +58,12 @@ extern  int32_t				mcg_clk_khz;	// following PLL init, holds actual MCG clock in
 extern  int32_t				core_clk_khz;	// following PLL init, holds actual core clock in kHz
 extern  int32_t				periph_clk_khz;	// following PLL init, holds actual peripheral clock in kHz
 
+/* Macro to enable all interrupts. */
+#define EnableInterrupts asm ("CPSIE  i")
+
+/* Macro to disable all interrupts. */
+#define DisableInterrupts asm ("CPSID  i")
+
 /********************************************************************/
 
 #endif /* _COMMON_H_ */

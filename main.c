@@ -206,6 +206,7 @@ static void taskhandler_flight( void *arg )
 		gyro.y = LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.gy );
 		gyro.z = LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.gz );
 
+#if 0
 		/* Print accel and gyro to the command line * 1000 */
 		printf( "Accel = %d, %d, %d\r\n",
 				(int)(LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.ax )*1000),
@@ -216,18 +217,19 @@ static void taskhandler_flight( void *arg )
 				(int)(LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gx )*1000),
 				(int)(LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gy )*1000),
 				(int)(LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gz )*1000) );
+#endif
 
 		for( i = 0; i < RECEIVER_NUM_CHAN_IN; i ++ )
 		{
 			IODRIVER_GetInputPulseWidth( i, &inputs[i] );
-			printf( "Receiver input %d = %d\r\n", i, inputs[i] );
+			//printf( "Receiver input %d = %d\r\n", i, (int)inputs[i] );
 		}
 
 		// Process flight controller
 		flight_process( 200, accel, gyro );
 
 		// TODO: Replace with smart sleep using timer
-		vTaskDelay( 500 );
+		vTaskDelay( 20 );
 	}
 }
 
@@ -296,10 +298,10 @@ static void timerCallback( TimerHandle_t xTimer )
 	vTaskResume( led_task );
 }
 
-
 static void set_rotor_spd( const size_t rotor_number, const uint16_t spd )
 {
-	//printf( "Set rotor spd %d = %d\r\n", rotor_number, spd );
+	IODRIVER_SetOutputPulseWidth( rotor_number, ( spd + RECEIVER_FLOOR ) );
+
 	return;
 }
 
@@ -307,11 +309,9 @@ static uint16_t get_recvr_channel( const size_t channel_number )
 {
 	uint32_t value;
 
-	return 0;
-
 	if ( 0 != IODRIVER_GetInputPulseWidth( channel_number, &value ) )
 	{
-		return value - RECEIVER_FLOOR;
+		return ( value - RECEIVER_FLOOR );
 	}
 
 	return 0;

@@ -12,6 +12,7 @@
 #include <stdint.h>
 
 #include "MK20D7.h"		// Chip definitions for FTM registers
+#include "common.h"		// DisableInterrupts
 
 // TODO Perhaps we could make these configurable in a construction function?
 #define TIMEOUT_MILLIS	( 500 )
@@ -69,10 +70,10 @@ static chanInCtx_t chanInCtxList[] =
 
 static chanOutCtx_t chanOutCtxList[] =
 {
-	{ FTM0_BASE_PTR, 0, PTC_BASE_PTR,  1, 0 },
-	{ FTM0_BASE_PTR, 1, PTC_BASE_PTR,  2, 0 },
-	{ FTM0_BASE_PTR, 2, PTC_BASE_PTR,  3, 0 },
-	{ FTM0_BASE_PTR, 3, PTC_BASE_PTR,  4, 0 },
+	{ FTM0_BASE_PTR, 0, PTC_BASE_PTR, 1, 12000 },
+	{ FTM0_BASE_PTR, 1, PTC_BASE_PTR, 2, 12000 },
+	{ FTM0_BASE_PTR, 2, PTC_BASE_PTR, 3, 12000 },
+	{ FTM0_BASE_PTR, 3, PTC_BASE_PTR, 4, 12000 },
 };
 
 static void initFTM0( void );
@@ -83,8 +84,16 @@ static void initFTM1( void );
  */
 void IODRIVER_Setup( void )
 {
+
+	/* Disable interrupts so that an interrupt cannot occur while we are still
+	 * setting everything up.
+	 */
+	DisableInterrupts;
+
 	initFTM0();
 	initFTM1();
+
+	EnableInterrupts;
 }
 
 /**
@@ -135,8 +144,6 @@ int IODRIVER_GetInputPulseWidth( int channel, uint32_t *pulseDurationTicks )
  */
 int IODRIVER_GetOutputPulseWidth( int channel, uint32_t *pulseDurationTicks )
 {
-	uint32_t pulseDuration;
-
 	if ( channel < RECEIVER_NUM_CHAN_OUT )
 	{
 		*pulseDurationTicks = chanOutCtxList[channel].pulseDuration;
@@ -265,6 +272,8 @@ void FTM1_IRQHandler( void )
 {
 	// Pipe interrupts to the same handler...
 	FTM0_IRQHandler();
+
+	return;
 }
 
 /**
@@ -289,8 +298,14 @@ static void initFTM0( void )
 	FTM0_MOD = FTM_MOD_MOD( FTM_MODULO );
 
 	/* FTM0 CH0 - Configure for PWM */
-	//FTM0_C0SC = ( FTM_CnSC_MSB_MASK | FTM_CnSC_ELSA_MASK );		/* Set up channel 0 status and control register to be a PWM channel, edge aligned, starts high becomes low after match */
-	//FTM0_C0V = FTM_CnV_VAL( 24000 );							/* Set up channel 0 value register */
+	FTM0_C0SC = ( FTM_CnSC_MSB_MASK | FTM_CnSC_ELSB_MASK );		/* Set up channel 0 status and control register to be a PWM channel, edge aligned, starts high becomes low after match */
+	//FTM0_C0V = FTM_CnV_VAL( 12000 );							/* Set up channel 0 value register */
+	FTM0_C1SC = ( FTM_CnSC_MSB_MASK | FTM_CnSC_ELSB_MASK );		/* Set up channel 0 status and control register to be a PWM channel, edge aligned, starts high becomes low after match */
+	//FTM0_C1V = FTM_CnV_VAL( 12000 );							/* Set up channel 0 value register */
+	FTM0_C2SC = ( FTM_CnSC_MSB_MASK | FTM_CnSC_ELSB_MASK );		/* Set up channel 0 status and control register to be a PWM channel, edge aligned, starts high becomes low after match */
+	//FTM0_C2V = FTM_CnV_VAL( 12000 );							/* Set up channel 0 value register */
+	FTM0_C3SC = ( FTM_CnSC_MSB_MASK | FTM_CnSC_ELSB_MASK );		/* Set up channel 0 status and control register to be a PWM channel, edge aligned, starts high becomes low after match */
+	//FTM0_C3V = FTM_CnV_VAL( 12000 );							/* Set up channel 0 value register */
 
 	/* FTM0 CH4 - Configure for input capture */
 	FTM0_C4SC = ( FTM_CnSC_ELSA_MASK | FTM_CnSC_ELSB_MASK | FTM_CnSC_CHIE_MASK );	// Configure the channel 1 mode register by turning on the rising edge, falling edge and interrupt enable modes
@@ -304,21 +319,25 @@ static void initFTM0( void )
 	/* FTM0_MODE: FAULTIE=0,FAULTM=0,CAPTEST=0,PWMSYNC=0,WPDIS=1,INIT=1,FTMEN=0 */
 	FTM0_MODE = (FTM_MODE_FAULTM(0x00) | FTM_MODE_WPDIS_MASK | FTM_MODE_INIT_MASK); /* Initialise the Output Channels */
 
-	// Enable interrupt in NVIC and set priority to 0 */
-	NVICICPR1 |= ( 1 << 30 );
-	NVICISER1 |= ( 1 << 30 );
-	NVICIP62 = 0x00;
-
 	/* Turn FTM0 on setting up the clock divider to 128 */
 	/* FTM0_SC: TOF=0,TOIE=0,CPWMS=0,CLKS=1,PS=0 */
 	FTM0_SC = ( FTM_SC_CLKS( 0x01 ) | FTM_SC_PS( FTM_FC_PS_DIV_4 ) | FTM_SC_TOIE_MASK ); /* Set up status and control register */
 
 	// Set up PTD4 (Teensy pin 6) as FTM0 output 0 (alt = 4).
 	// Port mapping on page 225 of the user K20 manual
+	PORTC_PCR1 = PORT_PCR_MUX( 0x4 );
+	PORTC_PCR2 = PORT_PCR_MUX( 0x4 );
+	PORTC_PCR3 = PORT_PCR_MUX( 0x4 );
+	PORTC_PCR4 = PORT_PCR_MUX( 0x4 );
 	PORTD_PCR4 = PORT_PCR_MUX( 0x4 );
 	PORTD_PCR5 = PORT_PCR_MUX( 0x4 );
 	PORTD_PCR6 = PORT_PCR_MUX( 0x4 );
 	PORTD_PCR7 = PORT_PCR_MUX( 0x4 );
+
+	// Enable interrupt in NVIC and set priority to 0 */
+	NVICICPR1 |= ( 1 << 30 );
+	NVICISER1 |= ( 1 << 30 );
+	NVICIP62 = 0x00;
 
 	return;
 }
@@ -354,19 +373,17 @@ static void initFTM1( void )
 	/* FTM1_MODE: FAULTIE=0,FAULTM=0,CAPTEST=0,PWMSYNC=0,WPDIS=1,INIT=1,FTMEN=0 */
 	FTM1_MODE = (FTM_MODE_FAULTM(0x00) | FTM_MODE_WPDIS_MASK | FTM_MODE_INIT_MASK); /* Initialise the Output Channels */
 
-	// Enable interrupt in NVIC and set priority to 0 */
-	NVICICPR1 |= ( 1 << 31 );
-	NVICISER1 |= ( 1 << 31 );
-	NVICIP63 = 0x00;
-
 	/* Turn FTM1 on setting up the clock divider to 128 */
 	/* FTM1_SC: TOF=0,TOIE=0,CPWMS=0,CLKS=1,PS=0 */
 	FTM1_SC = ( FTM_SC_CLKS( 0x01 ) | FTM_SC_PS( FTM_FC_PS_DIV_4 ) | FTM_SC_TOIE_MASK ); /* Set up status and control register */
 
-	// Set up port mappings
-	// Port mapping on page ~225 of the user K20 manual
 	PORTA_PCR12 = PORT_PCR_MUX( 0x3 );
 	PORTA_PCR13 = PORT_PCR_MUX( 0x3 );
+
+	// Enable interrupt in NVIC and set priority to 0 */
+	NVICICPR1 |= ( 1 << 31 );
+	NVICISER1 |= ( 1 << 31 );
+	NVICIP63 = 0x00;
 
 	return;
 }

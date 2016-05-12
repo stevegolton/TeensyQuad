@@ -39,6 +39,7 @@ void flight_process( uint16_t timestep_ms, vector3f_t accel, vector3f_t gyro )
 	// Update motor outputs
 	for ( motor_idx = 0; motor_idx < NUM_MOTORS; motor_idx++ )
 	{
+		motor_values[motor_idx] = rcvr_values[2];
 		_set_rotor_spd( motor_idx, motor_values[motor_idx] );
 	}
 
