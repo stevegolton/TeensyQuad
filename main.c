@@ -21,10 +21,13 @@
 #define LSM9DS0_G				( 0x6B ) // Would be 0x6A if SDO_G is LOW
 
 #define LED_TICK_MS				( 100UL )
+#define FLIGHT_TICK_MS			( 10UL )
 
 static stLSM9DS0_t lsm9dso_dvr;
 static TimerHandle_t led_timer = NULL;
+static TimerHandle_t flight_timer = NULL;
 static TaskHandle_t led_task = NULL;
+static TaskHandle_t flight_task = NULL;
 
 /**
  * @brief		Delay using a loop. Milliseconds are very approximate based on
@@ -189,8 +192,10 @@ static void taskhandler_flight( void *arg )
 {
 	vector3f_t accel;
 	vector3f_t gyro;
-	uint32_t inputs[RECEIVER_NUM_CHAN_IN];
-	int i;
+	//uint32_t inputs[RECEIVER_NUM_CHAN_IN];
+	//int i;
+
+	xTimerStart( flight_timer,0 );
 
 	for ( ;; )
 	{
@@ -217,19 +222,19 @@ static void taskhandler_flight( void *arg )
 				(int)(LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gx )*1000),
 				(int)(LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gy )*1000),
 				(int)(LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gz )*1000) );
-#endif
 
 		for( i = 0; i < RECEIVER_NUM_CHAN_IN; i ++ )
 		{
 			IODRIVER_GetInputPulseWidth( i, &inputs[i] );
-			//printf( "Receiver input %d = %d\r\n", i, (int)inputs[i] );
+			printf( "Receiver input %d = %d\r\n", i, (int)inputs[i] );
 		}
+#endif
 
 		// Process flight controller
-		flight_process( 200, accel, gyro );
+		flight_process( FLIGHT_TICK_MS, accel, gyro );
 
-		// TODO: Replace with smart sleep using timer
-		vTaskDelay( 20 );
+		// Suspend til our timer wakes us up again
+		vTaskSuspend( NULL );
 	}
 }
 
@@ -296,6 +301,11 @@ static void timerCallback( TimerHandle_t xTimer )
 {
 	// Resume the led task
 	vTaskResume( led_task );
+}
+
+static void timerCallback_Flight( TimerHandle_t xTimer )
+{
+	vTaskResume( flight_task );
 }
 
 static void set_rotor_spd( const size_t rotor_number, const uint16_t spd )
@@ -381,7 +391,7 @@ int main( void )
 				 500,							// Make the flight controller's stack large as we are likely to do many function calls
 				 NULL,							// Parameter to pass to the callback function, we have nothhing to pass..
 				 2,								// Priority, this is our only task so.. lets just use 0
-				 NULL );						// We could put a pointer to a task handle here which will be filled in when the task is created
+				 &flight_task );				// We could put a pointer to a task handle here which will be filled in when the task is created
 
 	// Create our comms task
 	xTaskCreate( taskhandler_comms,				// The task's callback function
@@ -399,12 +409,19 @@ int main( void )
 				 0,								// Priority, this is our only task so.. lets just use 0
 				 &led_task );					// We could put a pointer to a task handle here which will be filled in when the task is created
 
-	// Create a timer with a period of 500ms
+	// Create a timer for the LED task
 	led_timer = xTimerCreate( "LED_Diags_Timer", 				/* A text name, purely to help debugging. */
 							  ( LED_TICK_MS / portTICK_PERIOD_MS ),	/* The timer period, in this case 500ms. */
 							  pdTRUE,							/* We want this to be a recurring timer so set uxAutoReload to pdTRUE. */
 							  ( void * ) 0,						/* The ID is not used, so can be set to anything. */
 							  timerCallback );					/* The callback function that is called when the timer expires. */
+
+	// Create a timer for the flight task
+	flight_timer = xTimerCreate( "Flight_Timer", 				/* A text name, purely to help debugging. */
+							  ( FLIGHT_TICK_MS / portTICK_PERIOD_MS ),	/* The timer period, in this case 500ms. */
+							  pdTRUE,							/* We want this to be a recurring timer so set uxAutoReload to pdTRUE. */
+							  ( void * ) 0,						/* The ID is not used, so can be set to anything. */
+							  timerCallback_Flight );					/* The callback function that is called when the timer expires. */
 
 	// Start the tasks and timer running, this should never return as FreeRTOS
 	// will branch directly into the idle task.
