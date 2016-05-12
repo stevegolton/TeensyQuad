@@ -27,6 +27,9 @@ OBJECTS	= main.o \
 	      SFE_LSM9DS0.o \
 	      printf-stdarg.o \
 	      io_driver.o \
+	      kalman.o \
+	      pid.o \
+		  sensor_fusion.o \
 
 #  Select the toolchain by providing a path to the top level
 #  directory; this will be the folder that holds the
@@ -80,7 +83,7 @@ DEBUG = -g
 #  List the directories to be searched for libraries during linking.
 #  Optionally, list archives (libxxx.a) to be included during linking. 
 LIBDIRS  = -L/usr/lib/arm-none-eabi/lib/thumb -L/usr/lib/gcc/arm-none-eabi/4.8.2/armv7-ar/thumb/softfp/
-LIBS = -lc -lgcc
+LIBS = -lm -lc -lgcc
 
 #  Compiler options
 GCFLAGS = -Wall -fno-common -mcpu=$(CPU) -mthumb -O$(OPTIMIZATION) $(DEBUG)

@@ -29,6 +29,9 @@ static TimerHandle_t flight_timer = NULL;
 static TaskHandle_t led_task = NULL;
 static TaskHandle_t flight_task = NULL;
 
+static float afGyroBias[3];
+static float afAccelBias[3];
+
 /**
  * @brief		Delay using a loop. Milliseconds are very approximate based on
  * 				trial and error for our clock speed. Interrupts with slow this
@@ -207,9 +210,9 @@ static void taskhandler_flight( void *arg )
 		accel.y = LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.ay );
 		accel.z = LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.az );
 
-		gyro.x = LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.gx );
-		gyro.y = LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.gy );
-		gyro.z = LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.gz );
+		gyro.x = LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gx ) - afGyroBias[0];
+		gyro.y = LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gy ) - afGyroBias[1];
+		gyro.z = LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gz ) - afGyroBias[2];
 
 #if 0
 		/* Print accel and gyro to the command line * 1000 */
@@ -372,6 +375,7 @@ int main( void )
 
 	// Initialise LSM driver and flight controller
 	LSM9DS0_Setup( &lsm9dso_dvr, MODE_I2C, LSM9DS0_G, LSM9DS0_XM, write_byte, read_byte, read_bytes );
+	LSM9DS0_calLSM9DS0( &lsm9dso_dvr, &afGyroBias[0], &afAccelBias[0] );
 
 	// Initialise the flight controller module
 	flight_setup( set_rotor_spd, get_recvr_channel, ( RECEIVER_CEIL - RECEIVER_FLOOR ) );
