@@ -24,6 +24,6 @@ void flight_setup( set_rotor_spd_t set_rotor_spd,
  * @param[in]	accel		Array of 3 pointers to accelerometer values 0.001g/bit.
  * @param[in]	gyro		Array of 3 pointers to gyro values 0.001rad/s/bit.
  */
-void flight_process( uint16_t timestep_ms, vector3f_t accel, vector3f_t gyro );
+int flight_process( uint16_t timestep_ms, vector3f_t accel, vector3f_t gyro );
 
 #endif

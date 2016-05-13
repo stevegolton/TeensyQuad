@@ -1,4 +1,6 @@
 #include <stdio.h>			/* printf)_ & friends */
+#include <stdbool.h>		// bool definition
+
 #include "common.h"			/* uC specific dfns */
 #include "FreeRTOS.h"		/* FreeRTOS */
 #include "FreeRTOSConfig.h"
@@ -10,6 +12,8 @@
 #include "flight.h"			/* Flight controller */
 #include "vector3f.h"		/* vector3f_t */
 #include "io_driver.h"
+#include "ledstat.h"		/* Status led pattern controller */
+#include "task_flight.h"	/* Initializes the flight task */
 
 // Define me if you want debugging, remove me for release!
 //#define configASSERT( x )     if( ( x ) == 0 ) { taskDISABLE_INTERRUPTS(); for( ;; ); }
@@ -21,19 +25,15 @@
 #define LSM9DS0_G				( 0x6B ) // Would be 0x6A if SDO_G is LOW
 
 #define LED_TICK_MS				( 100UL )
-#define FLIGHT_TICK_MS			( 10UL )
 
 static stLSM9DS0_t lsm9dso_dvr;
-static TimerHandle_t led_timer = NULL;
-static TimerHandle_t flight_timer = NULL;
-static TaskHandle_t led_task = NULL;
-static TaskHandle_t flight_task = NULL;
+static stLEDSTAT_Ctx_t stLedStat;
 
-static float afGyroBias[3];
-static float afAccelBias[3];
+static TimerHandle_t led_timer = NULL;
+static TaskHandle_t led_task = NULL;
 
 /**
- * @brief		Delay using a loop. Milliseconds are very approximate based on
+ * @brief		Delay using a loop. MillisecxFlightTimerHandleronds are very approximate based on
  * 				trial and error for our clock speed. Interrupts with slow this
  * 				down.
  * @param[in]	ms		Delay in ms.
@@ -106,7 +106,7 @@ int port_putchar( int c )
 }
 
 /**
- * @brief		Blinks a number of times with a given interval.
+ * @brief		Blinks a number of tixFlightTimerHandlermes with a given interval.
  * @param[in]	reps		Number of times to blink.
  * @param[in]	period_ms	Blink period (ms).
  */
@@ -188,60 +188,6 @@ void vApplicationMallocFailedHook( void )
 }
 
 /**
- * @brief		Runs recursive flight processing.
- * @param[in]	arg		Opaque pointer to our user data.
- */
-static void taskhandler_flight( void *arg )
-{
-	vector3f_t accel;
-	vector3f_t gyro;
-	//uint32_t inputs[RECEIVER_NUM_CHAN_IN];
-	//int i;
-
-	xTimerStart( flight_timer,0 );
-
-	for ( ;; )
-	{
-		/* Read the latest accel and gyro values */
-		LSM9DS0_readAccel( &lsm9dso_dvr );
-		LSM9DS0_readGyro( &lsm9dso_dvr );
-
-		accel.x = LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.ax );
-		accel.y = LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.ay );
-		accel.z = LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.az );
-
-		gyro.x = LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gx ) - afGyroBias[0];
-		gyro.y = LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gy ) - afGyroBias[1];
-		gyro.z = LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gz ) - afGyroBias[2];
-
-#if 0
-		/* Print accel and gyro to the command line * 1000 */
-		printf( "Accel = %d, %d, %d\r\n",
-				(int)(LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.ax )*1000),
-				(int)(LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.ay )*1000),
-				(int)(LSM9DS0_calcAccel( &lsm9dso_dvr, lsm9dso_dvr.az )*1000) );
-
-		printf( "Gyro = %d, %d, %d\r\n",
-				(int)(LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gx )*1000),
-				(int)(LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gy )*1000),
-				(int)(LSM9DS0_calcGyro( &lsm9dso_dvr, lsm9dso_dvr.gz )*1000) );
-
-		for( i = 0; i < RECEIVER_NUM_CHAN_IN; i ++ )
-		{
-			IODRIVER_GetInputPulseWidth( i, &inputs[i] );
-			printf( "Receiver input %d = %d\r\n", i, (int)inputs[i] );
-		}
-#endif
-
-		// Process flight controller
-		flight_process( FLIGHT_TICK_MS, accel, gyro );
-
-		// Suspend til our timer wakes us up again
-		vTaskSuspend( NULL );
-	}
-}
-
-/**
  * @brief		Runs recursive comms processing.
  * @param[in]	arg		Opaque pointer to our user data.
  */
@@ -257,42 +203,14 @@ static void taskhandler_comms( void *arg )
  */
 static void taskhandler_led( void *arg )
 {
-	uint16_t blink_sequence[] = { 500, 500 };
-	size_t sequence_position = 0;
-	size_t sequence_len = sizeof( blink_sequence ) / sizeof( blink_sequence[0] );
-	uint16_t sequence_ctr = 0;
-
 	xTimerStart( led_timer, 0 );
 
 	for ( ; ; )
 	{
+		LEDSTAT_Process( &stLedStat, LED_TICK_MS );
+
 		// Suspend ourselves until some nice person resumes us...
 		vTaskSuspend( NULL );
-
-		sequence_ctr += LED_TICK_MS;
-
-		// Set the LED depending on where we are in the sequence
-		if ( 0 == ( sequence_position % 2 ) )
-		{
-			// Set LED
-			GPIOC_PSOR = ( 1 << 5 );
-		}
-		else
-		{
-			// Clear LED
-			GPIOC_PCOR = ( 1 << 5 );
-		}
-
-		if ( sequence_ctr >= blink_sequence[ sequence_position ] )
-		{
-			sequence_ctr = 4;
-			sequence_position++;
-
-			if ( sequence_len == sequence_position )
-			{
-				sequence_position = 0;
-			}
-		}
 	}
 }
 
@@ -304,11 +222,6 @@ static void timerCallback( TimerHandle_t xTimer )
 {
 	// Resume the led task
 	vTaskResume( led_task );
-}
-
-static void timerCallback_Flight( TimerHandle_t xTimer )
-{
-	vTaskResume( flight_task );
 }
 
 static void set_rotor_spd( const size_t rotor_number, const uint16_t spd )
@@ -354,14 +267,31 @@ static void read_bytes( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddres
 	return;
 }
 
+static void SetLed( void *const pvUserState, const bool bState )
+{
+	if ( true == bState )
+	{
+		// Set LED
+		GPIOC_PSOR = ( 1 << 5 );
+	}
+	else
+	{
+		// Clear LED
+		GPIOC_PCOR = ( 1 << 5 );
+	}
+
+	return;
+}
+
 /**
 ** @brief		Entry point to program.
 ** @return		Error code.
 */
 int main( void )
 {
-	// Initialise the Teensy's on-board LED
+	// Initialise the Teensy's on-board LED and our LED pattern controller
 	init_led();
+	LEDSTAT_Create( &stLedStat, SetLed, NULL );
 
 	// Initialise the UART module for comms with the ESP module
 	uart_init( UART0_BASE_PTR, 115200 );
@@ -375,10 +305,13 @@ int main( void )
 
 	// Initialise LSM driver and flight controller
 	LSM9DS0_Setup( &lsm9dso_dvr, MODE_I2C, LSM9DS0_G, LSM9DS0_XM, write_byte, read_byte, read_bytes );
-	LSM9DS0_calLSM9DS0( &lsm9dso_dvr, &afGyroBias[0], &afAccelBias[0] );
 
 	// Initialise the flight controller module
 	flight_setup( set_rotor_spd, get_recvr_channel, ( RECEIVER_CEIL - RECEIVER_FLOOR ) );
+
+	LSM9DS0_begin( &lsm9dso_dvr );
+
+	TASK_FLIGHT_Create( &lsm9dso_dvr, &stLedStat );
 
 	// Flash a little startup sequence, this isn't necessary at all, just nice
 	// to see a familiar sign before things start breaking!
@@ -386,16 +319,6 @@ int main( void )
 
 	// Say hello - printf is piped through the uart!
 	printf( "Hello, World!\r\n" );
-
-	LSM9DS0_begin( &lsm9dso_dvr );
-
-	// Create our flight task
-	xTaskCreate( taskhandler_flight,			// The task's callback function
-				 "Flight",						// Task name
-				 500,							// Make the flight controller's stack large as we are likely to do many function calls
-				 NULL,							// Parameter to pass to the callback function, we have nothhing to pass..
-				 2,								// Priority, this is our only task so.. lets just use 0
-				 &flight_task );				// We could put a pointer to a task handle here which will be filled in when the task is created
 
 	// Create our comms task
 	xTaskCreate( taskhandler_comms,				// The task's callback function
@@ -419,13 +342,6 @@ int main( void )
 							  pdTRUE,							/* We want this to be a recurring timer so set uxAutoReload to pdTRUE. */
 							  ( void * ) 0,						/* The ID is not used, so can be set to anything. */
 							  timerCallback );					/* The callback function that is called when the timer expires. */
-
-	// Create a timer for the flight task
-	flight_timer = xTimerCreate( "Flight_Timer", 				/* A text name, purely to help debugging. */
-							  ( FLIGHT_TICK_MS / portTICK_PERIOD_MS ),	/* The timer period, in this case 500ms. */
-							  pdTRUE,							/* We want this to be a recurring timer so set uxAutoReload to pdTRUE. */
-							  ( void * ) 0,						/* The ID is not used, so can be set to anything. */
-							  timerCallback_Flight );					/* The callback function that is called when the timer expires. */
 
 	// Start the tasks and timer running, this should never return as FreeRTOS
 	// will branch directly into the idle task.

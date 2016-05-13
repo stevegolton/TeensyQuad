@@ -64,6 +64,12 @@ void flight_setup( set_rotor_spd_t set_rotor_spd,
 	return;
 }
 
+
+int flight_calibrate( uint16_t timestep_ms, vector3f_t accel, vector3f_t gyro )
+{
+
+}
+
 /*
  * Motor Orientation (as viewed from above)
  *
@@ -94,7 +100,18 @@ void flight_setup( set_rotor_spd_t set_rotor_spd,
  * RX5 = VRB
  */
 
-void flight_process( uint16_t timestep_ms, vector3f_t accel, vector3f_t gyro )
+/**
+ * @brief		Waits until the accel and gyros are stable and then calculates
+ * 				the offset (the faster this is called the higher the accuracy of
+ * 				the calibration). After the flight controller has been
+ * 				calibrated we switch to running mode where the motors will be
+ * 				controlled directly.
+ * @param[in]	timestep_ms		Time in milliseconds since the last time we were called.
+ * @param[in]	accel			Current accelerometer readings in g.
+ * @param[in]	gyro			Current gyroscope readings in rad/sec.
+ * @returns		0 if calibration is still in progress, 1 if cal is complete.
+ */
+int flight_process( uint16_t timestep_ms, vector3f_t accel, vector3f_t gyro )
 {
 	int rcvr_idx;
 	uint16_t rcvr_values[NUM_RCVR_CHANNELS];
@@ -162,7 +179,7 @@ void flight_process( uint16_t timestep_ms, vector3f_t accel, vector3f_t gyro )
 		_set_rotor_spd( 3, ScaleDecimalToTicks( rxThrottle - fElevThrottle + fRollThrottle + fYawThrottle ) ); // M2
 	}
 
-	return;
+	return 0;
 }
 
 static uint32_t ScaleDecimalToTicks( float decimal )
