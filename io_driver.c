@@ -105,7 +105,7 @@ void IODRIVER_Setup( void )
  *
  * @returns		Error code, success if != 0.
  */
-int IODRIVER_GetInputPulseWidth( int channel, uint32_t *pulseDurationTicks )
+uint32_t IODRIVER_GetInputPulseWidth( int channel )
 {
 	uint32_t pulseDuration;
 
@@ -123,9 +123,7 @@ int IODRIVER_GetInputPulseWidth( int channel, uint32_t *pulseDurationTicks )
 			pulseDuration = RECEIVER_FLOOR;
 		}
 
-		*pulseDurationTicks = pulseDuration;
-
-		return 1;
+		return pulseDuration - RECEIVER_FLOOR;
 	}
 	else
 	{
@@ -173,7 +171,7 @@ int IODRIVER_SetOutputPulseWidth( int channel, uint32_t pulseDurationTicks )
 	{
 		ctx = &chanOutCtxList[channel];
 
-		ctx->pulseDuration = pulseDurationTicks;
+		ctx->pulseDuration = ( pulseDurationTicks + RECEIVER_FTM_1MS );
 
 		return 1;
 	}

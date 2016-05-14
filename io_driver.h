@@ -19,7 +19,7 @@
 void IODRIVER_Setup( void );
 void IODRIVER_FTM_ISR( void );
 void IODRIVER_Tick( uint32_t interval_millis );
-int IODRIVER_GetInputPulseWidth( int channel, uint32_t *pulseDurationTicks );
+uint32_t IODRIVER_GetInputPulseWidth( int channel );
 int IODRIVER_GetOutputPulseWidth( int channel, uint32_t *pulseDurationTicks );
 int IODRIVER_SetOutputPulseWidth( int channel, uint32_t pulseDurationTicks );
 

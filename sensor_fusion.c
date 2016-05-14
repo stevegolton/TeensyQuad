@@ -2,10 +2,11 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <math.h>		// <- TODO how efficient is this - used for atan2() (see below)?
-#include <sensor_fusion.h>
-#include "kalman.h"
+#include <string.h>
 
-#include <vector3f.h>
+#include "sensor_fusion.h"
+#include "kalman.h"
+#include "vector3f.h"
 
 #define PI					( 3.14159265359f )
 #define RAD2DEG				( 180/PI )
@@ -27,10 +28,11 @@ void SENSORFUSION_Setup( stSENSORFUSION_Cxt_t *pstCxt )
 }
 
 /* ************************************************************************** */
-vector3f_t *SENSORFUSION_Update( stSENSORFUSION_Cxt_t *pstCxt,
-								   vector3f_t *pstGyro,
-								   vector3f_t *pstAccel,
-								   float fTimestep_s )
+void SENSORFUSION_Update( stSENSORFUSION_Cxt_t *pstCxt,
+						  vector3f_t *pstGyro,
+						  vector3f_t *pstAccel,
+						  vector3f_t *pstRotation,
+						  float fTimestep_s )
 {
 	float pitchRate = pstGyro->y;
 	float pitchAngle = RAD2DEG * atan2f( -pstAccel->x, GetMag( pstAccel->z, pstAccel->y, 0 ) );
@@ -41,6 +43,8 @@ vector3f_t *SENSORFUSION_Update( stSENSORFUSION_Cxt_t *pstCxt,
 	pstCxt->stRotation.x = KALMAN_Update( &pstCxt->stKalmanRoll, rollRate, rollAngle, fTimestep_s );
 	pstCxt->stRotation.z = pstGyro->z * fTimestep_s + pstCxt->stRotation.z;
 
+	memcpy( pstRotation, &pstCxt->stRotation, sizeof( vector3f_t ) );
+
 #if 0
 	// Complimentary filter
 	pstCxt->stRotation.x = ( fRatioGyro * ( pstGyro->x * fTimestep_s + pstCxt->stRotation.x ) )
@@ -50,7 +54,7 @@ vector3f_t *SENSORFUSION_Update( stSENSORFUSION_Cxt_t *pstCxt,
 
 #endif
 
-	return &pstCxt->stRotation;
+	return;
 }
 
 /* ************************************************************************** */

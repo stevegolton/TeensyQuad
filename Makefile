@@ -32,6 +32,7 @@ OBJECTS	= main.o \
 		  sensor_fusion.o \
 		  ledstat.o \
 		  task_flight.o \
+		  vector3f.o \
 
 #  Select the toolchain by providing a path to the top level
 #  directory; this will be the folder that holds the
@@ -138,7 +139,7 @@ REMOVE = rm -f
 
 #########################################################################
 
-all:: $(PROJECT).hex $(PROJECT).bin stats dump
+all:: $(PROJECT).hex $(PROJECT).bin stats # dump
 
 $(PROJECT).bin: $(PROJECT).elf
 	$(OBJCOPY) -O binary -j .text -j .data $(PROJECT).elf $(PROJECT).bin

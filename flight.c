@@ -1,5 +1,7 @@
 #include <stdint.h>
 #include <stddef.h>
+#include <stdio.h>			// printf & friends
+#include <string.h>			// memset & friends
 
 #include "flight.h"
 #include "common.h"
@@ -7,67 +9,46 @@
 #include "sensor_fusion.h"
 #include "pid.h"
 
-static set_rotor_spd_t _set_rotor_spd;
-static get_recvr_channel_t _get_recvr_channel;
-static uint16_t _receiver_max;
-static uint16_t _receiver_center;
-static stSENSORFUSION_Cxt_t stSensorFusion;
+#define PIDGAIN_RATE_I (0)
+#define PIDGAIN_RATE_P (0.0048)
+#define PIDGAIN_RATE_D (0.0002)
 
-static stPidCxt_t stPIDElevRate;
-static stPidCxt_t stPIDElevAngle;
+#define PIDGAIN_ANGLE_P (0.92)
+#define PIDGAIN_ANGLE_I (0)
+#define PIDGAIN_ANGLE_D (0)
 
+#define THRESHOLD_THROT_FLIGHT		( 0.1f )
+
+// PID structures
+static stPidCxt_t stPIDPitchRate;
+static stPidCxt_t stPIDPitchAngle;
 static stPidCxt_t stPIDRollRate;
 static stPidCxt_t stPIDRollAngle;
-
 static stPidCxt_t stPIDYawRate;
 
-static float rxThrottle;
-static float rxPitch;
-static float rxRoll;
-static float rxYaw;
-static float rxVra;
-static float rxVrb;
+static stSENSORFUSION_Cxt_t stSensorFusion;
 
-static vector3f_t trim;
+static vector3f_t stTrim;
+static uint32_t _uiTimestamp;
 
-#define DEFGAIN_RATE_P (0.48)
-#define DEFGAIN_RATE_I (0)
-#define DEFGAIN_RATE_D (0.022)
-
-#define DEFGAIN_ANGLE_P (0.92)
-#define DEFGAIN_ANGLE_I (0)
-#define DEFGAIN_ANGLE_D (0)
-
-static uint32_t ScaleDecimalToTicks( float decimal );
-
-void flight_setup( set_rotor_spd_t set_rotor_spd,
-				   get_recvr_channel_t get_recvr_channel,
-				   int16_t receiver_max )
+/* ************************************************************************** */
+void flight_setup( void )
 {
-	// Cache local copies of callback functions
-	_set_rotor_spd = set_rotor_spd;
-	_get_recvr_channel = get_recvr_channel;
-	_receiver_max = receiver_max;
-	_receiver_center = ( receiver_max / 2 );
-
+	// Set up our sensor function module
 	SENSORFUSION_Setup( &stSensorFusion );
 
+	// Initialise PIDs
+	PID_Setup( &stPIDPitchAngle, PIDGAIN_ANGLE_I, PIDGAIN_ANGLE_P, PIDGAIN_ANGLE_D, 0, 0 );
+	PID_Setup( &stPIDPitchRate, PIDGAIN_RATE_I, PIDGAIN_RATE_P, PIDGAIN_RATE_D, 0, 0 );
 
-	PID_Setup( &stPIDElevAngle, DEFGAIN_ANGLE_I, DEFGAIN_ANGLE_P, DEFGAIN_ANGLE_D, 0, 0 );
-	PID_Setup( &stPIDElevRate, DEFGAIN_RATE_I, DEFGAIN_RATE_P, DEFGAIN_RATE_D, 0, 0 );
+	PID_Setup( &stPIDRollAngle, PIDGAIN_ANGLE_I, PIDGAIN_ANGLE_P, PIDGAIN_ANGLE_D, 0, 0 );
+	PID_Setup( &stPIDRollRate, PIDGAIN_RATE_I, PIDGAIN_RATE_P, PIDGAIN_RATE_D, 0, 0 );
 
-	PID_Setup( &stPIDRollAngle, DEFGAIN_ANGLE_I, DEFGAIN_ANGLE_P, DEFGAIN_ANGLE_D, 0, 0 );
-	PID_Setup( &stPIDRollRate, DEFGAIN_RATE_I, DEFGAIN_RATE_P, DEFGAIN_RATE_D, 0, 0 );
+	PID_Setup( &stPIDYawRate, PIDGAIN_RATE_I, PIDGAIN_RATE_P, PIDGAIN_RATE_D, 0, 0 );
 
-	PID_Setup( &stPIDYawRate, DEFGAIN_RATE_I, DEFGAIN_RATE_P, DEFGAIN_RATE_D, 0, 0 );
+	_uiTimestamp = 0;
 
 	return;
-}
-
-
-int flight_calibrate( uint16_t timestep_ms, vector3f_t accel, vector3f_t gyro )
-{
-
 }
 
 /*
@@ -77,7 +58,7 @@ int flight_calibrate( uint16_t timestep_ms, vector3f_t accel, vector3f_t gyro )
  *         |
  *       front
  *
- * M4-ACW       M3-CW
+ * M2-ACW       M1-CW
  *    \          /
  *     \        /
  *      \      /
@@ -85,7 +66,7 @@ int flight_calibrate( uint16_t timestep_ms, vector3f_t accel, vector3f_t gyro )
  *      /      \
  *     /        \
  *    /          \
- * M1-CW        M2-ACW
+ * M3-CW        M4-ACW
  *
  * Sensor Fusion Orientations
  * X +ve roll  = right side down
@@ -99,90 +80,118 @@ int flight_calibrate( uint16_t timestep_ms, vector3f_t accel, vector3f_t gyro )
  * RX4 = VRA
  * RX5 = VRB
  */
-
-/**
- * @brief		Waits until the accel and gyros are stable and then calculates
- * 				the offset (the faster this is called the higher the accuracy of
- * 				the calibration). After the flight controller has been
- * 				calibrated we switch to running mode where the motors will be
- * 				controlled directly.
- * @param[in]	timestep_ms		Time in milliseconds since the last time we were called.
- * @param[in]	accel			Current accelerometer readings in g.
- * @param[in]	gyro			Current gyroscope readings in rad/sec.
- * @returns		0 if calibration is still in progress, 1 if cal is complete.
- */
-int flight_process( uint16_t timestep_ms, vector3f_t accel, vector3f_t gyro )
+/* ************************************************************************** */
+void flight_process( uint16_t uiTimestep,
+					 vector3f_t *pstAccel,
+					 vector3f_t *pstGyro,
+					 stReceiverInput_t *pstReceiverInput,
+					 stMotorDemands_t *pstMotorDemands )
 {
-	int rcvr_idx;
-	uint16_t rcvr_values[NUM_RCVR_CHANNELS];
-	vector3f_t *pstRotation;
-	float fElevRate;
-	float fElevAngleErr = 0;
-	float fElevThrottle;
+	float fTimeStep;
+	vector3f_t stRotation;
+	static uint16_t uiDecimation;
 
-	float fRollRate;
-	float fRollAngleErr = 0;
-	float fRollThrottle;
+	float fAngleErrRoll;
+	float fAngleErrPitch;
 
-	float fYawRateErr = 0;
+	float fRateTargetRoll;
+	float fRateTargetPitch;
 
-	float fYawThrottle;
+	float fRateErrRoll;
+	float fRateErrPitch;
+	float fRateErrYaw;
 
-	float fTimeStep = (float)timestep_ms / 1000;
+	float fAccelTargetRoll;
+	float fAccelTargetPitch;
+	float fAccelTargetYaw;
 
-	// Fetch receiver inputs
-	for ( rcvr_idx = 0; rcvr_idx < NUM_RCVR_CHANNELS; rcvr_idx++ )
+	// Work out the timestep as a float
+	fTimeStep = ( (float)uiTimestep / 1000 );
+	_uiTimestamp += uiTimestep;
+
+	// Update sensor fusion module
+	SENSORFUSION_Update( &stSensorFusion,
+						 pstGyro,
+						 pstAccel,
+						 &stRotation,
+						 fTimeStep );
+
+	// Apply trim
+	stRotation = VECTOR3F_Subtract( stRotation, stTrim );
+
+	// TODO Remove debug code
+#if 1
+	if ( 100 <= uiDecimation++ )
 	{
-		rcvr_values[rcvr_idx] = _get_recvr_channel( rcvr_idx );
+		uiDecimation = 0;
+		printf( "Angle = %d: %d, %d, %d\r\n",
+				(int)_uiTimestamp,
+				(int)( ( stRotation.x ) * 1000 ),
+				(int)( ( stRotation.y ) * 1000 ),
+				(int)( ( stRotation.z ) * 1000 )
+				);
 	}
-
-	// Update sensor fusion
-	pstRotation = SENSORFUSION_Update( &stSensorFusion,
-									   &gyro,
-									   &accel,
-									   fTimeStep );
-
-	/* Work out input values as floats */
-	rxRoll = ( (float)( (int32_t)rcvr_values[0] - _receiver_center ) ) / _receiver_max;
-	rxPitch = ( (float)( (int32_t)rcvr_values[1] - _receiver_center ) ) / _receiver_max;
-	rxThrottle = ( (float)rcvr_values[2] ) / _receiver_max;
-	rxYaw = ( (float)( (int32_t)rcvr_values[3] - _receiver_center ) ) / _receiver_max;
-	rxVra = ( (float)rcvr_values[4] ) / _receiver_max;
-	rxVrb = ( (float)rcvr_values[5] ) / _receiver_max;
+#endif
 
 	// If throttle is small.. don't fly
-	if ( rxThrottle < 0.1 )
+	if ( THRESHOLD_THROT_FLIGHT > pstReceiverInput->fThrottle )
 	{
-		_set_rotor_spd( 0, 0 );
-		_set_rotor_spd( 1, 0 );
-		_set_rotor_spd( 2, 0 );
-		_set_rotor_spd( 3, 0 );
+		// Throttle is too small - turn all the motors off
+		pstMotorDemands->fFL = 0.0f;
+		pstMotorDemands->fFR = 0.0f;
+		pstMotorDemands->fRL = 0.0f;
+		pstMotorDemands->fRR = 0.0f;
 	}
 	else
 	{
-		// We are flying... calculate PIDS
-		fElevAngleErr = ( ( (pstRotation->y) / 90 ) + trim.y ) - ( rxPitch * rxVra );
-		fRollAngleErr = ( ( (pstRotation->x) / 90 ) + trim.x ) - ( rxRoll * rxVra );
+		// Throttle is significant - let's fly!
 
-		fElevRate = PID_Update( &stPIDElevAngle, fElevAngleErr, fTimeStep );
-		fElevThrottle = PID_Update( &stPIDElevRate, fElevRate + (gyro.y/500), fTimeStep );
+		// Calculate roll and pitch errors
+		// These are the equal to the pitch and roll inputs from the receiver
+		// minus the actual pitch and roll inputs from the IMU.
+		// The inputs from the roll and elevation stick is multiplied by the VRA
+		// input to allow an element of adjustment. The max requested angle
+		// is +- 0.5 radians which is around +-30 degrees.
+		fAngleErrRoll = ( ( pstReceiverInput->fRoll * pstReceiverInput->fVarA ) - stRotation.x );
+		fAngleErrPitch = ( ( pstReceiverInput->fPitch * pstReceiverInput->fVarB ) - stRotation.y );
 
-		fRollRate = PID_Update( &stPIDRollAngle, fRollAngleErr, fTimeStep );
-		fRollThrottle = PID_Update( &stPIDRollRate, fRollRate + (gyro.x/500), fTimeStep );
+		// Update the PIDs
+		// First we feed our angular error to the "angle" PID which will give us
+		// the desired angular speed we need to achieve in order to fix the
+		// angular error.
+		fRateTargetRoll = PID_Update( &stPIDRollAngle, fAngleErrRoll, fTimeStep );
+		fRateTargetPitch = PID_Update( &stPIDPitchAngle, fAngleErrPitch, fTimeStep );
 
-		fYawRateErr = trim.z + ( rxYaw * rxVrb );
-		fYawThrottle = PID_Update( &stPIDYawRate, fYawRateErr + (gyro.z/500), fTimeStep );
+		// Then we find the difference between this desired angular speed and
+		// the current angular speed (from the gyroscope) to obtain an error
+		// factor in the current angular speed.
+		// For example if we are rotating exactly at the desired angular speed,
+		// then this error will be 0 and no offset needs to be applied to the
+		// motors in this axis.
+		fRateErrRoll = ( -pstGyro->x );
+		fRateErrPitch = ( -pstGyro->y );
+		fRateErrYaw = ( pstReceiverInput->fYaw - pstGyro->z );
 
-		_set_rotor_spd( 0, ScaleDecimalToTicks( rxThrottle + fElevThrottle + fRollThrottle - fYawThrottle ) ); // M3
-		_set_rotor_spd( 1, ScaleDecimalToTicks( rxThrottle + fElevThrottle - fRollThrottle + fYawThrottle ) ); // M4
-		_set_rotor_spd( 2, ScaleDecimalToTicks( rxThrottle - fElevThrottle - fRollThrottle - fYawThrottle ) ); // M1
-		_set_rotor_spd( 3, ScaleDecimalToTicks( rxThrottle - fElevThrottle + fRollThrottle + fYawThrottle ) ); // M2
+		// The result of this PID will give us the desired angular acceleration
+		// which we can feed directly to the motors.
+		fAccelTargetRoll = PID_Update( &stPIDRollRate, fRateErrRoll, fTimeStep );
+		fAccelTargetPitch = PID_Update( &stPIDPitchRate, fRateErrPitch, fTimeStep );
+		fAccelTargetYaw = PID_Update( &stPIDYawRate, fRateErrYaw + pstGyro->z, fTimeStep );
+
+		// Set the motor values with offsets applied
+		pstMotorDemands->fFL = ( pstReceiverInput->fThrottle + fAccelTargetPitch - fAccelTargetRoll + fAccelTargetYaw );
+		pstMotorDemands->fFR = ( pstReceiverInput->fThrottle + fAccelTargetPitch + fAccelTargetRoll - fAccelTargetYaw );
+		pstMotorDemands->fRL = ( pstReceiverInput->fThrottle - fAccelTargetPitch - fAccelTargetRoll - fAccelTargetYaw );
+		pstMotorDemands->fRR = ( pstReceiverInput->fThrottle - fAccelTargetPitch + fAccelTargetRoll + fAccelTargetYaw );
 	}
 
-	return 0;
+	return;
 }
 
-static uint32_t ScaleDecimalToTicks( float decimal )
+/* ************************************************************************** */
+void FLIGHT_SetTrim( const vector3f_t *const pstTrim )
 {
-	return (uint32_t)( decimal * _receiver_max );
+	memcpy( &stTrim, pstTrim, sizeof( vector3f_t ) );
+
+	return;
 }

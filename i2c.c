@@ -43,6 +43,24 @@ uint32_t i2c_init( uint8_t i2c_number, uint8_t mult, uint8_t icr )
 {
 	I2C_MemMapPtr i2c;
 
+	DisableInterrupts;
+
+	// Enable interrupt in NVIC and set priority to 0
+	// See the vector channel assignments in K20P121M100SF2RM.pdf page 69
+	// The interupt for I2C0 is number 79:
+	// 24 / 32 = 0
+	// 24 % 32 = 24
+	// Therefore we choose the 0th register and set bit 24 (INT_I2C0 - 16)
+	NVICICPR0 |= ( 1 << 24 );
+	NVICISER0 |= ( 1 << 24 );
+	NVICIP24 = 0x00;
+
+	SIM_SCGC4 |= SIM_SCGC4_I2C0_MASK;
+	SIM_SCGC5 |= SIM_SCGC5_PORTB_MASK;
+
+	PORTB_PCR2 = PORT_PCR_MUX(0x02) | PORT_PCR_ODE_MASK;
+	PORTB_PCR3 = PORT_PCR_MUX(0x02) | PORT_PCR_ODE_MASK;
+
 	/* Make a stack pointer to the device we are initialising for convenience */
 	i2c = i2c_base_ptrs[i2c_number];
 
@@ -53,6 +71,8 @@ uint32_t i2c_init( uint8_t i2c_number, uint8_t mult, uint8_t icr )
 	/* Initialise frequency register */
 	i2c->F &= ~0xf;
 	i2c->F |= ( (mult << I2C_F_MULT_SHIFT) | icr );
+
+	EnableInterrupts;
 
 	return i2c_number;
 }

@@ -8,12 +8,10 @@
 #include "timers.h"
 #include "i2c.h"			/* i2c ldd */
 #include "uart.h"			/* uart ldd */
-#include "SFE_LSM9DS0.h"	/* LSM9DS0 driver */
-#include "flight.h"			/* Flight controller */
 #include "vector3f.h"		/* vector3f_t */
 #include "io_driver.h"
 #include "ledstat.h"		/* Status led pattern controller */
-#include "task_flight.h"	/* Initializes the flight task */
+#include "task_flight.h"	/* Initialises the flight task */
 
 // Define me if you want debugging, remove me for release!
 //#define configASSERT( x )     if( ( x ) == 0 ) { taskDISABLE_INTERRUPTS(); for( ;; ); }
@@ -21,14 +19,9 @@
 #define STARTUP_BLINK_COUNT		( 3 )
 #define STARTUP_BLINK_PERIOD	( 100 )
 
-#define LSM9DS0_XM				( 0x1D ) // Would be 0x1E if SDO_XM is LOW
-#define LSM9DS0_G				( 0x6B ) // Would be 0x6A if SDO_G is LOW
-
 #define LED_TICK_MS				( 100UL )
 
-static stLSM9DS0_t lsm9dso_dvr;
 static stLEDSTAT_Ctx_t stLedStat;
-
 static TimerHandle_t led_timer = NULL;
 static TaskHandle_t led_task = NULL;
 
@@ -75,28 +68,6 @@ static void init_led( void )
 	PORTC_PCR5 = PORT_PCR_MUX( 0x1 );	// LED is on PC5 (pin 13), config as GPIO (alt = 1)
 	GPIOC_PDDR = ( 1 << 5 );			// make this an output pin
 	GPIOC_PCOR = ( 1 << 5 );			// start with LED off
-}
-
-void init_i2c( void )
-{
-	// Enable interrupt in NVIC and set priority to 0
-	// See the vector channel assignments in K20P121M100SF2RM.pdf page 69
-	// The interupt for I2C0 is number 79:
-	// 24 / 32 = 0
-	// 24 % 32 = 24
-	// Therefore we choose the 0th register and set bit 24 (INT_I2C0 - 16)
-	NVICICPR0 |= ( 1 << 24 );
-	NVICISER0 |= ( 1 << 24 );
-	NVICIP24 = 0x00;
-
-	SIM_SCGC4 |= SIM_SCGC4_I2C0_MASK;
-	SIM_SCGC5 |= SIM_SCGC5_PORTB_MASK;
-
-	PORTB_PCR2 = PORT_PCR_MUX(0x02) | PORT_PCR_ODE_MASK;
-	PORTB_PCR3 = PORT_PCR_MUX(0x02) | PORT_PCR_ODE_MASK;
-
-	// TODO check status?
-	i2c_init( 0, 0x01, 0x20 );
 }
 
 int port_putchar( int c )
@@ -224,49 +195,6 @@ static void timerCallback( TimerHandle_t xTimer )
 	vTaskResume( led_task );
 }
 
-static void set_rotor_spd( const size_t rotor_number, const uint16_t spd )
-{
-	IODRIVER_SetOutputPulseWidth( rotor_number, ( spd + RECEIVER_FLOOR ) );
-
-	return;
-}
-
-static uint16_t get_recvr_channel( const size_t channel_number )
-{
-	uint32_t value;
-
-	if ( 0 != IODRIVER_GetInputPulseWidth( channel_number, &value ) )
-	{
-		return ( value - RECEIVER_FLOOR );
-	}
-
-	return 0;
-}
-
-static void write_byte( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddress, uint8_t data )
-{
-	//printf( "I2Cwr %d>%d\r\n", subAddress, data );
-	i2c_write_byte( 0, address, subAddress, data );
-
-	return;
-}
-
-static uint8_t read_byte( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddress )
-{
-	uint8_t data;
-
-	i2c_read_byte( 0, address, subAddress, &data );
-
-	return data;
-}
-
-static void read_bytes( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddress, uint8_t * dest, uint8_t count )
-{
-	i2c_read_bytes( 0, address, subAddress, dest, count );
-
-	return;
-}
-
 static void SetLed( void *const pvUserState, const bool bState )
 {
 	if ( true == bState )
@@ -301,17 +229,10 @@ int main( void )
 	IODRIVER_Setup();
 
 	// Initialise I2C which is used to talk to the LSM9DS0 IMU module
-	init_i2c();
+	// TODO check status?
+	i2c_init( 0, 0x01, 0x20 );
 
-	// Initialise LSM driver and flight controller
-	LSM9DS0_Setup( &lsm9dso_dvr, MODE_I2C, LSM9DS0_G, LSM9DS0_XM, write_byte, read_byte, read_bytes );
-
-	// Initialise the flight controller module
-	flight_setup( set_rotor_spd, get_recvr_channel, ( RECEIVER_CEIL - RECEIVER_FLOOR ) );
-
-	LSM9DS0_begin( &lsm9dso_dvr );
-
-	TASK_FLIGHT_Create( &lsm9dso_dvr, &stLedStat );
+	TASK_FLIGHT_Create( &stLedStat );
 
 	// Flash a little startup sequence, this isn't necessary at all, just nice
 	// to see a familiar sign before things start breaking!
