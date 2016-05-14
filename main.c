@@ -15,6 +15,7 @@
 #include "ledstat.h"		/* Status led pattern controller */
 #include "task_flight.h"	/* Initialises the flight task */
 #include "task_comms.h"		/* Comms task */
+#include "task_led.h"		/* Led task */
 #include "IPC_types.h"		// stFlightDetails_t
 
 // Define me if you want debugging, remove me for release!
@@ -25,10 +26,8 @@
 
 #define LED_TICK_MS				( 100UL )
 
-static stLEDSTAT_Ctx_t stLedStat;
-static TimerHandle_t led_timer = NULL;
-static TaskHandle_t led_task = NULL;
 static QueueHandle_t xCommsQueue = NULL;
+static QueueHandle_t xLedPatternQueue = NULL;
 
 /**
  * @brief		Delay using a loop. MillisecxFlightTimerHandleronds are very approximate based on
@@ -169,49 +168,6 @@ void vApplicationMallocFailedHook( void )
 }
 
 /**
- * @brief		Runs the LED diagnostics reporting.
- * @param[in]	arg		Opaque pointer to our user data.
- */
-static void taskhandler_led( void *arg )
-{
-	xTimerStart( led_timer, 0 );
-
-	for ( ; ; )
-	{
-		LEDSTAT_Process( &stLedStat, LED_TICK_MS );
-
-		// Suspend ourselves until some nice person resumes us...
-		vTaskSuspend( NULL );
-	}
-}
-
-/**
- * @brief		Callback for our timer, controls the LED task.
- * @param[in]	xTimer		Timer handle.
- */
-static void timerCallback( TimerHandle_t xTimer )
-{
-	// Resume the led task
-	vTaskResume( led_task );
-}
-
-static void SetLed( void *const pvUserState, const bool bState )
-{
-	if ( true == bState )
-	{
-		// Set LED
-		GPIOC_PSOR = ( 1 << 5 );
-	}
-	else
-	{
-		// Clear LED
-		GPIOC_PCOR = ( 1 << 5 );
-	}
-
-	return;
-}
-
-/**
 ** @brief		Entry point to program.
 ** @return		Error code.
 */
@@ -219,7 +175,6 @@ int main( void )
 {
 	// Initialise the Teensy's on-board LED and our LED pattern controller
 	init_led();
-	LEDSTAT_Create( &stLedStat, SetLed, NULL );
 
 	// Initialise the UART module for comms with the ESP module
 	uart_init( UART0_BASE_PTR, 115200 );
@@ -233,10 +188,12 @@ int main( void )
 	i2c_init( 0, 0x01, 0x20 );
 
 	xCommsQueue = xQueueCreate( 20, sizeof( stFlightDetails_t ) );
+	xLedPatternQueue = xQueueCreate( 5, sizeof( stLedPattern_t ) );
 
 	// Create tasks
-	TASK_FLIGHT_Create( &stLedStat, xCommsQueue );
+	TASK_FLIGHT_Create( xCommsQueue, xLedPatternQueue );
 	TASK_COMMS_Create( xCommsQueue );
+	TASK_LED_Create( xLedPatternQueue );
 
 	// Flash a little startup sequence, this isn't necessary at all, just nice
 	// to see a familiar sign before things start breaking!
@@ -244,21 +201,6 @@ int main( void )
 
 	// Say hello - printf is piped through the uart!
 	printf( "Hello from TeensyQuad!\r\n" );
-
-	// Create our comms task#include "IPC_types.h"		// stFlightDetails_t
-	xTaskCreate( taskhandler_led,				// The task's callback function
-				 "LED_Diags",					// Task name
-				 configMINIMAL_STACK_SIZE,		// We can specify different stack sizes for each task? Cool!
-				 NULL,							// Parameter to pass to the callback function, we have nothhing to pass..
-				 0,								// Priority, this is our only task so.. lets just use 0
-				 &led_task );					// We could put a pointer to a task handle here which will be filled in when the task is created
-
-	// Create a timer for the LED task
-	led_timer = xTimerCreate( "LED_Diags_Timer", 				/* A text name, purely to help debugging. */
-							  ( LED_TICK_MS / portTICK_PERIOD_MS ),	/* The timer period, in this case 500ms. */
-							  pdTRUE,							/* We want this to be a recurring timer so set uxAutoReload to pdTRUE. */
-							  ( void * ) 0,						/* The ID is not used, so can be set to anything. */
-							  timerCallback );					/* The callback function that is called when the timer expires. */
 
 	// Start the tasks and timer running, this should never return as FreeRTOS
 	// will branch directly into the idle task.

@@ -17,7 +17,6 @@
 
 #include "config.h"			// Board specific config
 #include "SFE_LSM9DS0.h"	// LSM9DS0 driver
-#include "ledstat.h"		// Status led pattern controller
 #include "flight.h"			// Flight controller
 #include "vector3f.h"		// vector3f_t
 #include "io_driver.h"		// IO driver
@@ -29,7 +28,7 @@
  * Macros and Defines
  * ************************************************************************** */
 #define FLIGHT_TICK_MS			( 10UL )
-#define mArraySize( x )		( sizeof( x ) / sizeof( x[0] ) )
+#define mArrayLen( x )		( sizeof( x ) / sizeof( x[0] ) )
 
 #define LSM9DS0_XM				( 0x1D ) // Would be 0x1E if SDO_XM is LOW
 #define LSM9DS0_G				( 0x6B ) // Would be 0x6A if SDO_G is LOW
@@ -86,7 +85,6 @@ static void read_bytes( stLSM9DS0_t * stThis, uint8_t address, uint8_t subAddres
 static TaskHandle_t xFlightTaskHandle = NULL;
 static TimerHandle_t xFlightTimerHandle = NULL;
 static stLSM9DS0_t stImu;
-static stLEDSTAT_Ctx_t *_pstLedStat;
 static vector3f_t stAverageGyro;
 
 static const uint16_t auiLedPatternFlight[] = { 500, 500 };
@@ -99,17 +97,18 @@ static const vector3f_t stTrim =
 };
 
 static QueueHandle_t _xCommsQueue;
+static QueueHandle_t _xLedPatternQueue;
 
 /* ************************************************************************** **
  * API Functions
  * ************************************************************************** */
 
 /* ************************************************************************** */
-void TASK_FLIGHT_Create( stLEDSTAT_Ctx_t *const pstLedStat, QueueHandle_t xCommsQueue )
+void TASK_FLIGHT_Create( QueueHandle_t xCommsQueue, QueueHandle_t xLedPatternQueue )
 {
 	// Store the instances of the IMU and ledstat modules to use
-	_pstLedStat = pstLedStat;
 	_xCommsQueue = xCommsQueue;
+	_xLedPatternQueue = xLedPatternQueue;
 
 	// Initialise LSM driver
 	LSM9DS0_Setup( &stImu, MODE_I2C, LSM9DS0_G, LSM9DS0_XM, write_byte, read_byte, read_bytes );
@@ -152,14 +151,16 @@ static void TaskHandler( void *arg )
 	stReceiverInput_t stReceiverInputs;
 	stMotorDemands_t stMotorDemands;
 	stFlightDetails_t stFlightDetails;
+	stLedPattern_t stLedPattern;
 
 	// Start our timer which will resume this task accurately on a tick
 	xTimerStart( xFlightTimerHandle, 0 );
 
 	// Set the LED to blink with the "flying" pattern
-	LEDSTAT_SetPattern( _pstLedStat,
-						auiLedPatternFlight,
-						mArraySize( auiLedPatternFlight ) );
+	memcpy( stLedPattern.auiPattern, auiLedPatternFlight, sizeof( auiLedPatternFlight ) );
+	stLedPattern.sPatternLen = mArrayLen( auiLedPatternFlight );
+
+	xQueueSend( _xLedPatternQueue, &stLedPattern, 0 );
 
 	for ( ; ; )
 	{
@@ -240,7 +241,7 @@ static vector3f_t GetBias( int16_t iTemp )
 	const stGyroBiasTableEntry_t *pstBiasLower;
 
 	// Linear interpolation - TODO might be a good idea to do a bsearch here
-	for ( uiIndex = 0; uiIndex < mArraySize( astGyroBiasTable ); uiIndex++ )
+	for ( uiIndex = 0; uiIndex < mArrayLen( astGyroBiasTable ); uiIndex++ )
 	{
 		if ( iTemp < astGyroBiasTable[ uiIndex ].iTemp )
 		{
@@ -248,7 +249,7 @@ static vector3f_t GetBias( int16_t iTemp )
 		}
 	}
 
-	if ( uiIndex == 0 || uiIndex == mArraySize( astGyroBiasTable ) )
+	if ( uiIndex == 0 || uiIndex == mArrayLen( astGyroBiasTable ) )
 	{
 		// Temp too low or too high - no point in interpolating
 		return astGyroBiasTable[ uiIndex ].stBias;

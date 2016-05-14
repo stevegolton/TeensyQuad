@@ -1,5 +1,5 @@
-#ifndef TASK_FLIGHT_H
-#define TASK_FLIGHT_H
+#ifndef TASK_LED_H
+#define TASK_LED_H
 
 #include "FreeRTOS.h"		// FreeRTOS
 #include "FreeRTOSConfig.h"	// FreeRTOS portable config
@@ -7,11 +7,9 @@
 #include "timers.h"			// FreeRTOS timers
 #include "queue.h"			// FreeRTOS queues
 
-#include "ledstat.h"		// Status led pattern controller
-
 /**
- * @brief		Initialises the flight task.
+ * @brief		Initialises the ledstat task.
  */
-void TASK_FLIGHT_Create( QueueHandle_t xCommsQueue, QueueHandle_t xLedPatternQueue );
+void TASK_LED_Create( QueueHandle_t xLedPatternQueue );
 
 #endif
