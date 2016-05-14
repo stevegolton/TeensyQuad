@@ -12,6 +12,7 @@
 #include "io_driver.h"
 #include "ledstat.h"		/* Status led pattern controller */
 #include "task_flight.h"	/* Initialises the flight task */
+#include "task_comms.h"		/* Comms task */
 
 // Define me if you want debugging, remove me for release!
 //#define configASSERT( x )     if( ( x ) == 0 ) { taskDISABLE_INTERRUPTS(); for( ;; ); }
@@ -159,16 +160,6 @@ void vApplicationMallocFailedHook( void )
 }
 
 /**
- * @brief		Runs recursive comms processing.
- * @param[in]	arg		Opaque pointer to our user data.
- */
-static void taskhandler_comms( void *arg )
-{
-	// Suspend ourselves forever!
-	vTaskSuspend( NULL );
-}
-
-/**
  * @brief		Runs the LED diagnostics reporting.
  * @param[in]	arg		Opaque pointer to our user data.
  */
@@ -232,22 +223,16 @@ int main( void )
 	// TODO check status?
 	i2c_init( 0, 0x01, 0x20 );
 
+	// Create tasks
 	TASK_FLIGHT_Create( &stLedStat );
+	TASK_COMMS_Create();
 
 	// Flash a little startup sequence, this isn't necessary at all, just nice
 	// to see a familiar sign before things start breaking!
 	blink( STARTUP_BLINK_COUNT, STARTUP_BLINK_PERIOD );
 
 	// Say hello - printf is piped through the uart!
-	printf( "Hello, World!\r\n" );
-
-	// Create our comms task
-	xTaskCreate( taskhandler_comms,				// The task's callback function
-				 "Comms",						// Task name
-				 configMINIMAL_STACK_SIZE,		// We can specify different stack sizes for each task? Cool!
-				 NULL,							// Parameter to pass to the callback function, we have nothhing to pass..
-				 1,								// Priority, this is our only task so.. lets just use 0
-				 NULL );						// We could put a pointer to a task handle here which will be filled in when the task is created
+	printf( "Hello from TeensyQuad!\r\n" );
 
 	// Create our comms task
 	xTaskCreate( taskhandler_led,				// The task's callback function

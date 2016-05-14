@@ -120,7 +120,7 @@ void flight_process( uint16_t uiTimestep,
 	stRotation = VECTOR3F_Subtract( stRotation, stTrim );
 
 	// TODO Remove debug code
-#if 1
+#if 0
 	if ( 100 <= uiDecimation++ )
 	{
 		uiDecimation = 0;

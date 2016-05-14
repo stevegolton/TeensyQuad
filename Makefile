@@ -32,6 +32,7 @@ OBJECTS	= main.o \
 		  sensor_fusion.o \
 		  ledstat.o \
 		  task_flight.o \
+		  task_comms.o \
 		  vector3f.o \
 
 #  Select the toolchain by providing a path to the top level
