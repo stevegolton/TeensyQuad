@@ -58,5 +58,6 @@ void flight_process( uint16_t uiTimestep,
  * @param[in]	pstTrim		Pointer to the new trim.
  */
 void FLIGHT_SetTrim( const vector3f_t *const pstTrim );
+void FLIGHT_GetRotation( vector3f_t *pstRotation );
 
 #endif

@@ -2,10 +2,12 @@
 #include <stdbool.h>		// bool definition
 
 #include "common.h"			/* uC specific dfns */
-#include "FreeRTOS.h"		/* FreeRTOS */
-#include "FreeRTOSConfig.h"
-#include "portmacro.h"
-#include "timers.h"
+#include "FreeRTOS.h"		// FreeRTOS
+#include "FreeRTOSConfig.h"	// FreeRTOS portable config
+#include "portmacro.h"		// Portable functions
+#include "timers.h"			// FreeRTOS timers
+#include "queue.h"			// FreeRTOS queues
+
 #include "i2c.h"			/* i2c ldd */
 #include "uart.h"			/* uart ldd */
 #include "vector3f.h"		/* vector3f_t */
@@ -13,6 +15,7 @@
 #include "ledstat.h"		/* Status led pattern controller */
 #include "task_flight.h"	/* Initialises the flight task */
 #include "task_comms.h"		/* Comms task */
+#include "IPC_types.h"		// stFlightDetails_t
 
 // Define me if you want debugging, remove me for release!
 //#define configASSERT( x )     if( ( x ) == 0 ) { taskDISABLE_INTERRUPTS(); for( ;; ); }
@@ -25,6 +28,7 @@
 static stLEDSTAT_Ctx_t stLedStat;
 static TimerHandle_t led_timer = NULL;
 static TaskHandle_t led_task = NULL;
+static QueueHandle_t xCommsQueue = NULL;
 
 /**
  * @brief		Delay using a loop. MillisecxFlightTimerHandleronds are very approximate based on
@@ -75,6 +79,11 @@ int port_putchar( int c )
 {
 	uart_putchar( UART0_BASE_PTR, (char)c );
 	return 1;
+}
+
+int port_getchar( void )
+{
+	return uart_getchar( UART0_BASE_PTR );
 }
 
 /**
@@ -223,9 +232,11 @@ int main( void )
 	// TODO check status?
 	i2c_init( 0, 0x01, 0x20 );
 
+	xCommsQueue = xQueueCreate( 20, sizeof( stFlightDetails_t ) );
+
 	// Create tasks
-	TASK_FLIGHT_Create( &stLedStat );
-	TASK_COMMS_Create();
+	TASK_FLIGHT_Create( &stLedStat, xCommsQueue );
+	TASK_COMMS_Create( xCommsQueue );
 
 	// Flash a little startup sequence, this isn't necessary at all, just nice
 	// to see a familiar sign before things start breaking!
@@ -234,7 +245,7 @@ int main( void )
 	// Say hello - printf is piped through the uart!
 	printf( "Hello from TeensyQuad!\r\n" );
 
-	// Create our comms task
+	// Create our comms task#include "IPC_types.h"		// stFlightDetails_t
 	xTaskCreate( taskhandler_led,				// The task's callback function
 				 "LED_Diags",					// Task name
 				 configMINIMAL_STACK_SIZE,		// We can specify different stack sizes for each task? Cool!

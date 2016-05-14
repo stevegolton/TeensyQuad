@@ -30,6 +30,7 @@ static stSENSORFUSION_Cxt_t stSensorFusion;
 
 static vector3f_t stTrim;
 static uint32_t _uiTimestamp;
+static vector3f_t stRotation;
 
 /* ************************************************************************** */
 void flight_setup( void )
@@ -88,7 +89,6 @@ void flight_process( uint16_t uiTimestep,
 					 stMotorDemands_t *pstMotorDemands )
 {
 	float fTimeStep;
-	vector3f_t stRotation;
 	static uint16_t uiDecimation;
 
 	float fAngleErrRoll;
@@ -192,6 +192,14 @@ void flight_process( uint16_t uiTimestep,
 void FLIGHT_SetTrim( const vector3f_t *const pstTrim )
 {
 	memcpy( &stTrim, pstTrim, sizeof( vector3f_t ) );
+
+	return;
+}
+
+/* ************************************************************************** */
+void FLIGHT_GetRotation( vector3f_t *pstRotation )
+{
+	*pstRotation = stRotation;
 
 	return;
 }

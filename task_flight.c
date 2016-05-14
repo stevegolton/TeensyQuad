@@ -10,9 +10,10 @@
 #include <stdio.h>			// printf & friends
 
 #include "FreeRTOS.h"		// FreeRTOS
-#include "FreeRTOSConfig.h"
-#include "timers.h"
-#include "portmacro.h"
+#include "FreeRTOSConfig.h"	// FreeRTOS portable config
+#include "portmacro.h"		// Portable functions
+#include "timers.h"			// FreeRTOS timers
+#include "queue.h"			// FreeRTOS queues
 
 #include "config.h"			// Board specific config
 #include "SFE_LSM9DS0.h"	// LSM9DS0 driver
@@ -22,6 +23,7 @@
 #include "io_driver.h"		// IO driver
 #include "SFE_LSM9DS0.h"	// LSM9DS0 driver
 #include "i2c.h"			// I2C device driver
+#include "IPC_types.h"		// stFlightDetails_t
 
 /* ************************************************************************** **
  * Macros and Defines
@@ -96,15 +98,18 @@ static const vector3f_t stTrim =
 	0.0f
 };
 
+static QueueHandle_t _xCommsQueue;
+
 /* ************************************************************************** **
  * API Functions
  * ************************************************************************** */
 
 /* ************************************************************************** */
-void TASK_FLIGHT_Create( stLEDSTAT_Ctx_t *const pstLedStat )
+void TASK_FLIGHT_Create( stLEDSTAT_Ctx_t *const pstLedStat, QueueHandle_t xCommsQueue )
 {
 	// Store the instances of the IMU and ledstat modules to use
 	_pstLedStat = pstLedStat;
+	_xCommsQueue = xCommsQueue;
 
 	// Initialise LSM driver
 	LSM9DS0_Setup( &stImu, MODE_I2C, LSM9DS0_G, LSM9DS0_XM, write_byte, read_byte, read_bytes );
@@ -146,6 +151,7 @@ static void TaskHandler( void *arg )
 	vector3f_t stGyroBias;
 	stReceiverInput_t stReceiverInputs;
 	stMotorDemands_t stMotorDemands;
+	stFlightDetails_t stFlightDetails;
 
 	// Start our timer which will resume this task accurately on a tick
 	xTimerStart( xFlightTimerHandle, 0 );
@@ -196,6 +202,11 @@ static void TaskHandler( void *arg )
 		IODRIVER_SetOutputPulseWidth( CFG_MOTOR_FR, (uint32_t)( stMotorDemands.fFR * RECEIVER_RANGE ) );
 		IODRIVER_SetOutputPulseWidth( CFG_MOTOR_RL, (uint32_t)( stMotorDemands.fRL * RECEIVER_RANGE ) );
 		IODRIVER_SetOutputPulseWidth( CFG_MOTOR_RR, (uint32_t)( stMotorDemands.fRR * RECEIVER_RANGE ) );
+
+		FLIGHT_GetRotation( &stFlightDetails.stAttitude );
+		stFlightDetails.stAttitudeRate = gyro;
+
+		xQueueSend( _xCommsQueue, &stFlightDetails, 0 );
 
 		//PrintDebug( accel, gyro, stImu.temperature );
 

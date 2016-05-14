@@ -186,6 +186,13 @@ static int print( char **out, const char *format, va_list args )
 	return pc;
 }
 
+/*
+int getchar( void )
+{
+	extern int port_getchar(void);
+	return port_getchar();
+}*/
+
 int printf(const char *format, ...)
 {
         va_list args;
