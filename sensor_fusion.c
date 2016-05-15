@@ -10,8 +10,8 @@
 
 #define PI					( 3.14159265359f )
 #define RAD2DEG				( 180/PI )
-//#define fRatioGyro			( 0.98 )
-//#define fRatioAccel			( 1 - fRatioGyro )
+#define fRatioGyro			( 0.98 )
+#define fRatioAccel			( 1 - fRatioGyro )
 
 static float GetMag( float x, float y, float z );
 
@@ -35,22 +35,24 @@ void SENSORFUSION_Update( stSENSORFUSION_Cxt_t *pstCxt,
 						  float fTimestep_s )
 {
 	float pitchRate = pstGyro->y;
-	float pitchAngle = RAD2DEG * atan2f( -pstAccel->x, GetMag( pstAccel->z, pstAccel->y, 0 ) );
+	float pitchAngle = atan2f( -pstAccel->x, GetMag( pstAccel->z, pstAccel->y, 0 ) );
 	float rollRate = pstGyro->x;
-	float rollAngle = RAD2DEG * atan2f( pstAccel->y, GetMag( pstAccel->z, pstAccel->x, 0 ) );
+	float rollAngle = atan2f( pstAccel->y, GetMag( pstAccel->z, pstAccel->x, 0 ) );
 
+#if 0
 	pstCxt->stRotation.y = KALMAN_Update( &pstCxt->stKalmanPitch, pitchRate, pitchAngle, fTimestep_s );
 	pstCxt->stRotation.x = KALMAN_Update( &pstCxt->stKalmanRoll, rollRate, rollAngle, fTimestep_s );
 	pstCxt->stRotation.z = pstGyro->z * fTimestep_s + pstCxt->stRotation.z;
 
 	memcpy( pstRotation, &pstCxt->stRotation, sizeof( vector3f_t ) );
-
-#if 0
+#else
 	// Complimentary filter
 	pstCxt->stRotation.x = ( fRatioGyro * ( pstGyro->x * fTimestep_s + pstCxt->stRotation.x ) )
-			+ ( fRatioAccel * ( RAD2DEG * atan2f( pstAccel->y, GetMag( pstAccel->z, pstAccel->x, 0 ) ) ) );
+			+ ( fRatioAccel * ( atan2f( pstAccel->y, GetMag( pstAccel->z, pstAccel->x, 0 ) ) ) );
 	pstCxt->stRotation.y = ( fRatioGyro * ( pstGyro->y * fTimestep_s + pstCxt->stRotation.y ) )
-			- ( fRatioAccel * ( RAD2DEG * atan2f( pstAccel->x, GetMag( pstAccel->z, pstAccel->y, 0 ) ) ) );
+			- ( fRatioAccel * ( atan2f( pstAccel->x, GetMag( pstAccel->z, pstAccel->y, 0 ) ) ) );
+
+	memcpy( pstRotation, &pstCxt->stRotation, sizeof( vector3f_t ) );
 
 #endif
 

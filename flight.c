@@ -9,12 +9,16 @@
 #include "sensor_fusion.h"
 #include "pid.h"
 
-#define PIDGAIN_RATE_I (0)
-#define PIDGAIN_RATE_P (0.0048)
-#define PIDGAIN_RATE_D (0.00006)
+#define PIDGAIN_RATE_YAW_I (0)
+#define PIDGAIN_RATE_YAW_P (0.1)
+#define PIDGAIN_RATE_YAW_D (0)
 
-#define PIDGAIN_ANGLE_P (4.0)
+#define PIDGAIN_RATE_I (0)
+#define PIDGAIN_RATE_P (0.08)
+#define PIDGAIN_RATE_D (0.001)
+
 #define PIDGAIN_ANGLE_I (0)
+#define PIDGAIN_ANGLE_P (6)
 #define PIDGAIN_ANGLE_D (0)
 
 #define THRESHOLD_THROT_FLIGHT		( 0.1f )
@@ -45,7 +49,7 @@ void flight_setup( void )
 	PID_Setup( &stPIDRollAngle, PIDGAIN_ANGLE_I, PIDGAIN_ANGLE_P, PIDGAIN_ANGLE_D, 0, 0 );
 	PID_Setup( &stPIDRollRate, PIDGAIN_RATE_I, PIDGAIN_RATE_P, PIDGAIN_RATE_D, 0, 0 );
 
-	PID_Setup( &stPIDYawRate, PIDGAIN_RATE_I, PIDGAIN_RATE_P, PIDGAIN_RATE_D, 0, 0 );
+	PID_Setup( &stPIDYawRate, PIDGAIN_RATE_YAW_I, PIDGAIN_RATE_YAW_P, PIDGAIN_RATE_YAW_D, 0, 0 );
 
 	_uiTimestamp = 0;
 
@@ -153,7 +157,7 @@ void flight_process( uint16_t uiTimestep,
 		// input to allow an element of adjustment. The max requested angle
 		// is +- 0.5 radians which is around +-30 degrees.
 		fAngleErrRoll = ( ( pstReceiverInput->fRoll * pstReceiverInput->fVarA ) - stRotation.x );
-		fAngleErrPitch = ( ( pstReceiverInput->fPitch * pstReceiverInput->fVarB ) - stRotation.y );
+		fAngleErrPitch = ( ( pstReceiverInput->fPitch * pstReceiverInput->fVarA ) - stRotation.y );
 
 		// Update the PIDs
 		// First we feed our angular error to the "angle" PID which will give us
@@ -170,7 +174,7 @@ void flight_process( uint16_t uiTimestep,
 		// motors in this axis.
 		fRateErrRoll = ( -fRateTargetRoll + pstGyro->x );
 		fRateErrPitch = ( -fRateTargetPitch + pstGyro->y );
-		fRateErrYaw = ( pstReceiverInput->fYaw + ( pstGyro->z / 300.0f ) );
+		fRateErrYaw = ( ( pstReceiverInput->fYaw * pstReceiverInput->fVarA ) + pstGyro->z );
 
 		// The result of this PID will give us the desired angular acceleration
 		// which we can feed directly to the motors.

@@ -29,23 +29,35 @@ static stPARAM_t astParamList[] =
 {
 	{
 		"PIDGainRate_P",
-		0.0F
+		0.0f
 	},
 	{
 		"PIDGainRate_D",
-		0.0F
+		0.0f
 	},
 	{
 		"PIDGainAngle_P",
-		0.0F
+		0.0f
 	},
 	{
 		"PIDGainRateYaw_P",
-		0.0F
+		0.0f
 	},
 	{
 		"PIDGainRateYaw_D",
-		0.0F
+		0.0f
+	},
+	{
+		"TrimRoll",
+		-0.014f
+	},
+	{
+		"TrimPitch",
+		0.080f
+	},
+	{
+		"TrimYaw",
+		-0.0f
 	}
 };
 
@@ -72,15 +84,28 @@ stPARAM_t *PARAM_FindParamByName( const char* const sName, const size_t uiLen, s
 
 	for ( sParamIndex = 0; sParamIndex < mArrayLen( astParamList ); sParamIndex++ )
 	{
-		if ( 0 == strncmp( sName, astParamList[sParamIndex].sName, uiLen ) )
+		if ( 0 != uiLen )
 		{
-			break;
+			if ( 0 == strncmp( sName, astParamList[sParamIndex].sName, uiLen ) )
+			{
+				break;
+			}
+		}
+		else
+		{
+			if ( 0 == strcmp( sName, astParamList[sParamIndex].sName ) )
+			{
+				break;
+			}
 		}
 	}
 
 	if ( sParamIndex != mArrayLen( astParamList ) )
 	{
-		*puiIndex = sParamIndex;
+		if ( puiIndex )
+		{
+			*puiIndex = sParamIndex;
+		}
 		return &astParamList[sParamIndex];
 	}
 	else

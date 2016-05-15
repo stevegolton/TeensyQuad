@@ -229,12 +229,12 @@ static void SendAttitude( void )
 							   mavlink_system.compid,
 							   &mavlink_mesg_tx,
 							   uiMillisSinceBoot,
-							   - stFlightDetails.stAttitude.x / RAD2DEG,
-							   stFlightDetails.stAttitude.y / RAD2DEG,
-							   stFlightDetails.stAttitude.z / RAD2DEG,
-							   -stFlightDetails.stAttitudeRate.x / RAD2DEG,
-							   stFlightDetails.stAttitudeRate.y / RAD2DEG,
-							   stFlightDetails.stAttitudeRate.z / RAD2DEG
+							   stFlightDetails.stAttitude.x,
+							   -stFlightDetails.stAttitude.y,
+							   stFlightDetails.stAttitude.z,
+							   stFlightDetails.stAttitudeRate.x,
+							   -stFlightDetails.stAttitudeRate.y,
+							   stFlightDetails.stAttitudeRate.z
 							   );
 
 	// Copy the message to the send buffer
@@ -295,7 +295,7 @@ static void ReadMavlink( void )
 						if (    ( pstParam->fValue != set.param_value )
 							 && ( !isnan( set.param_value ) )
 							 && ( !isinf( set.param_value ) )
-							 && ( set.param_type == MAVLINK_TYPE_FLOAT ) )
+							 && ( set.param_type == MAV_PARAM_TYPE_REAL32 ) )
 						{
 							// Write new value
 							pstParam->fValue = set.param_value;
@@ -327,7 +327,7 @@ static void SendParam( int iParamIndex )
 								  &mavlink_mesg_tx,
 								  pastParamList[ iParamIndex ].sName,
 								  pastParamList[ iParamIndex ].fValue,
-								  MAVLINK_TYPE_FLOAT,
+								  MAV_PARAM_TYPE_REAL32,
 								  PARAM_GetParamCount(),
 								  iParamIndex );
 

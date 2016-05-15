@@ -23,6 +23,7 @@
 #include "SFE_LSM9DS0.h"	// LSM9DS0 driver
 #include "i2c.h"			// I2C device driver
 #include "IPC_types.h"		// stFlightDetails_t
+#include "params.h"			// System parameter access
 
 /* ************************************************************************** **
  * Macros and Defines
@@ -32,6 +33,10 @@
 
 #define LSM9DS0_XM				( 0x1D ) // Would be 0x1E if SDO_XM is LOW
 #define LSM9DS0_G				( 0x6B ) // Would be 0x6A if SDO_G is LOW
+
+#define PI						( 3.14159265359f )
+#define RAD2DEG					( 180 / PI )
+#define DEG2RAD					( PI / 180 )
 
 /* ************************************************************************** **
  * Typedefs
@@ -57,6 +62,8 @@ static void TaskHandler( void *arg );
  * @param[in]	xTimer	Timer handle.
  */
 static void TimerHandler( TimerHandle_t xTimer );
+
+static void UpdateParameters( void );
 
 #if 0
 /**
@@ -89,13 +96,24 @@ static vector3f_t stAverageGyro;
 
 static const uint16_t auiLedPatternFlight[] = { 500, 500 };
 
-static const vector3f_t stTrim =
+static const vector3f_t stDefaultTrim =
 {
 	-0.8f,
 	4.6f,
 	0.0f
 };
 
+// Parameters
+static stPARAM_t *pstTrimRoll;
+static stPARAM_t *pstTrimPitch;
+static stPARAM_t *pstTrimYaw;
+static stPARAM_t *pstPidGainRateP;
+static stPARAM_t *pstPidGainRateD;
+static stPARAM_t *pstPidGainAngleP;
+static stPARAM_t *pstPidGainRateYawP;
+static stPARAM_t *pstPidGainRateYawD;
+
+// Local queue pointers
 static QueueHandle_t _xCommsQueue;
 static QueueHandle_t _xLedPatternQueue;
 
@@ -106,7 +124,7 @@ static QueueHandle_t _xLedPatternQueue;
 /* ************************************************************************** */
 void TASK_FLIGHT_Create( QueueHandle_t xCommsQueue, QueueHandle_t xLedPatternQueue )
 {
-	// Store the instances of the IMU and ledstat modules to use
+		// Store the instances of the IMU and ledstat modules to use
 	_xCommsQueue = xCommsQueue;
 	_xLedPatternQueue = xLedPatternQueue;
 
@@ -116,7 +134,6 @@ void TASK_FLIGHT_Create( QueueHandle_t xCommsQueue, QueueHandle_t xLedPatternQue
 
 	// Initialize the flight controller module
 	flight_setup();
-	FLIGHT_SetTrim( &stTrim );
 
 	// Create our flight task
 	xTaskCreate( TaskHandler,					// The task's callback function
@@ -162,8 +179,23 @@ static void TaskHandler( void *arg )
 
 	xQueueSend( _xLedPatternQueue, &stLedPattern, 0 );
 
+	// Search for and store pointers to system parameters for quick access later
+	// This makes the assumption that parameters cannot come and go at runtime
+	pstTrimRoll = PARAM_FindParamByName( "TrimRoll", 0, NULL );
+	pstTrimPitch = PARAM_FindParamByName( "TrimPitch", 0, NULL );
+	pstTrimYaw = PARAM_FindParamByName( "TrimYaw", 0, NULL );
+	pstPidGainRateP = PARAM_FindParamByName( "PIDGainRate_P", 0, NULL );
+	pstPidGainRateD = PARAM_FindParamByName( "PIDGainRate_D", 0, NULL );
+	pstPidGainAngleP = PARAM_FindParamByName( "PIDGainAngle_P", 0, NULL );
+	pstPidGainRateYawP = PARAM_FindParamByName( "PIDGainRateYaw_P", 0, NULL );
+	pstPidGainRateYawD = PARAM_FindParamByName( "PIDGainRateYaw_D", 0, NULL );
+
 	for ( ; ; )
 	{
+		// Collects trim and PID gain updates from the parameters and passes
+		// them into the flight controller if they have updated
+		UpdateParameters();
+
 		// Read the latest accel and gyro values
 		LSM9DS0_readAccel( &stImu );
 		LSM9DS0_readGyro( &stImu );
@@ -183,7 +215,13 @@ static void TaskHandler( void *arg )
 		stGyroBias = GetBias( stImu.temperature );
 		gyro = VECTOR3F_Subtract( gyro, stGyroBias );
 
-		/* Work out receiver input values as floats */
+		// The value we get out of the gyro is in degrees/sec but we want it in
+		// rad/sec so lets convert it now.
+		gyro.x *= DEG2RAD;
+		gyro.y *= DEG2RAD;
+		gyro.z *= DEG2RAD;
+
+		// Work out receiver input values as floats
 		stReceiverInputs.fRoll = ( (float)( (int32_t)IODRIVER_GetInputPulseWidth( CFG_RECEIVER_ROLL ) - RECEIVER_CENTER ) ) / ( RECEIVER_RANGE / 2 );
 		stReceiverInputs.fPitch = ( (float)( (int32_t)IODRIVER_GetInputPulseWidth( CFG_RECEIVER_PITCH ) - RECEIVER_CENTER ) ) / ( RECEIVER_RANGE / 2 );
 		stReceiverInputs.fThrottle = ( (float)IODRIVER_GetInputPulseWidth( CFG_RECEIVER_THROTTLE ) ) / RECEIVER_RANGE;
@@ -204,9 +242,10 @@ static void TaskHandler( void *arg )
 		IODRIVER_SetOutputPulseWidth( CFG_MOTOR_RL, (uint32_t)( stMotorDemands.fRL * RECEIVER_RANGE ) );
 		IODRIVER_SetOutputPulseWidth( CFG_MOTOR_RR, (uint32_t)( stMotorDemands.fRR * RECEIVER_RANGE ) );
 
+		// Send the flight details off to whoever is listening at the other
+		// end of this mysterious queue.
 		FLIGHT_GetRotation( &stFlightDetails.stAttitude );
 		stFlightDetails.stAttitudeRate = gyro;
-
 		xQueueSend( _xCommsQueue, &stFlightDetails, 0 );
 
 		//PrintDebug( accel, gyro, stImu.temperature );
@@ -217,9 +256,41 @@ static void TaskHandler( void *arg )
 }
 
 /* ************************************************************************** */
+static void UpdateParameters( void )
+{
+	vector3f_t stTrim;
+
+	// Make a copy the default trim
+	stTrim = stDefaultTrim;
+
+	// Copy in each parameter if they exist
+	if ( pstTrimRoll )
+	{
+		stTrim.x = pstTrimRoll->fValue;
+	}
+
+	if ( pstTrimPitch )
+	{
+		stTrim.y = pstTrimPitch->fValue;
+	}
+
+	if ( pstTrimYaw )
+	{
+		stTrim.y = pstTrimPitch->fValue;
+	}
+
+	// Set the trim in the flight controller
+	FLIGHT_SetTrim( &stTrim );
+
+	return;
+}
+
+/* ************************************************************************** */
 static void TimerHandler( TimerHandle_t xTimer )
 {
 	vTaskResume( xFlightTaskHandle );
+
+	return;
 }
 
 /* ************************************************************************** */

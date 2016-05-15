@@ -728,13 +728,13 @@ static void calcgRes(stLSM9DS0_t * stThis)
 	switch (stThis->gScale)
 	{
 	case G_SCALE_245DPS:
-		stThis->gRes = 245.0 / 32768.0;
+		stThis->gRes = ( 245.0 ) / 32768.0;
 		break;
 	case G_SCALE_500DPS:
-		stThis->gRes = 500.0 / 32768.0;
+		stThis->gRes = ( 500.0 ) / 32768.0;
 		break;
 	case G_SCALE_2000DPS:
-		stThis->gRes = 2000.0 / 32768.0;
+		stThis->gRes = ( 2000.0 ) / 32768.0;
 		break;
 	}
 }
