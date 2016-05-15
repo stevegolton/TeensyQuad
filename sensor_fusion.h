@@ -17,6 +17,7 @@ void SENSORFUSION_Setup( stSENSORFUSION_Cxt_t *pstCxt );
 void SENSORFUSION_Update( stSENSORFUSION_Cxt_t *pstCxt,
 						  vector3f_t *pstGyro,
 						  vector3f_t *pstAccel,
+						  vector3f_t *pstMag,
 						  vector3f_t *pstRotation,
 						  float fTimestep_s );
 

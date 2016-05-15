@@ -36,6 +36,7 @@ OBJECTS	= main.o \
 		  task_led.o \
 		  vector3f.o \
 		  params.o \
+		  MadgwickAHRS.o \
 
 #  Select the toolchain by providing a path to the top level
 #  directory; this will be the folder that holds the

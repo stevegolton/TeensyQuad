@@ -47,3 +47,11 @@ float PID_Update( stPidCxt_t *pstCxt, float fError, float fTimestep_s )
 	// Calc output
 	return ( fError * pstCxt->fKProp ) + ( pstCxt->fIntegral * pstCxt->fKInt ) + ( fDiff * pstCxt->fKDiff );
 }
+
+/* ************************************************************************** */
+void PID_SetGains( stPidCxt_t *pstCxt, const float fP, const float fD, const float fI )
+{
+	pstCxt->fKInt = fI;
+	pstCxt->fKProp = fP;
+	pstCxt->fKDiff = fD;
+}

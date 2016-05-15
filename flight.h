@@ -50,6 +50,7 @@ void flight_setup( void );
 void flight_process( uint16_t uiTimestep,
 					 vector3f_t *pstAccel,
 					 vector3f_t *pstGyro,
+					 vector3f_t *pstMag,
 					 stReceiverInput_t *pstReceiverInput,
 					 stMotorDemands_t *pstMotorDemands );
 
@@ -58,6 +59,7 @@ void flight_process( uint16_t uiTimestep,
  * @param[in]	pstTrim		Pointer to the new trim.
  */
 void FLIGHT_SetTrim( const vector3f_t *const pstTrim );
+void FLIGHT_SetPidGains( const float fRateP, const float fRateD, const float fAngleP );
 void FLIGHT_GetRotation( vector3f_t *pstRotation );
 
 #endif

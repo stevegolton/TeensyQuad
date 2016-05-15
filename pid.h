@@ -24,5 +24,6 @@ void PID_Setup( stPidCxt_t *pstCxt,
 				float fIntMax,
 				float fIntMin );
 float PID_Update( stPidCxt_t *pstCxt, float fError, float fTimestep_s );
+void PID_SetGains( stPidCxt_t *pstCxt, const float fP, const float fD, const float fI );
 
 #endif

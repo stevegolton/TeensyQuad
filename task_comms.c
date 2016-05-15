@@ -39,9 +39,48 @@ extern int port_getchar_nonblock( void );
 #define PI					( 3.14159265359f )
 #define RAD2DEG				( 180 / PI )
 
+//#define PID_TUNE
+
 /* ************************************************************************** **
  * Typedefs
  * ************************************************************************** */
+
+typedef struct
+{
+	uint8_t uiSig1;
+	uint8_t uiSig2;
+	uint16_t uiLen;
+
+	uint16_t uiRx1;
+	uint16_t uiRx2;
+	uint16_t uiRx3;
+	uint16_t uiRx4;
+	float fM1;
+	float fM2;
+	float fM3;
+	float fM4;
+	float fAttitudeRoll;
+	float fAttitudePitch;
+	float fAttitudeYaw;
+	uint32_t uiRxMsgCnt;
+	float fGainRateP;
+
+} stPidTuneMsgFmt_t;
+
+typedef struct
+{
+	uint8_t uiSig1;
+	uint8_t uiSig2;
+	uint16_t uiLen;
+
+	float fPidAngleP;
+	float fPidAngleI;
+	float fPidAngleD;
+	float fPidRateP;
+	float fPidRateI;
+	float fPidRateD;
+
+} stPidTuneCfgMsgFmt_t;
 
 /* ************************************************************************** **
  * Function Prototypes
@@ -57,6 +96,9 @@ static void TaskHandler( void *arg );
  * @param[in]	xTimer	Timer handle.
  */
 static void TimerHandler( TimerHandle_t xTimer );
+
+static void SendPIDTuneTelem( void );
+static void ReadPIDTuneMessage( void );
 
 static void SendHeartbeat( void );
 static void SendAttitude( void );
@@ -88,6 +130,18 @@ static uint32_t uiMillisSinceBoot;
 static QueueHandle_t _xCommsQueue;
 static uint16_t uiParamIndex;
 
+static stPARAM_t *pstPidGainRateP;
+static stPARAM_t *pstPidGainRateD;
+static stPARAM_t *pstPidGainAngleP;
+static stPARAM_t *pstPidGainRateYawP;
+static stPARAM_t *pstPidGainRateYawD;
+
+static uint8_t bySig1;
+static uint8_t bySig2;
+static uint32_t uiRxMsgCount;
+static stPidTuneCfgMsgFmt_t stMsg;
+static int uiIndex;
+
 /* ************************************************************************** **
  * API Functions
  * ************************************************************************** */
@@ -96,6 +150,10 @@ static uint16_t uiParamIndex;
 void TASK_COMMS_Create( QueueHandle_t xCommsQueue )
 {
 	_xCommsQueue = xCommsQueue;
+
+	bySig1 = bySig2 = 0;
+	uiRxMsgCount = 0;
+	uiIndex = ( sizeof( stPidTuneCfgMsgFmt_t ) - 2);
 
 	// Create our flight task
 	xTaskCreate( TaskHandler,					// The task's callback function
@@ -133,33 +191,23 @@ static void TaskHandler( void *arg )
 	int index;
 
 	uiParamIndex = PARAM_GetParamCount();
-	uiParamIndex = 0;
+
+	pstPidGainRateP = PARAM_FindParamByName( "PIDGainRate_P", 0, NULL );
+	pstPidGainRateD = PARAM_FindParamByName( "PIDGainRate_D", 0, NULL );
+	pstPidGainAngleP = PARAM_FindParamByName( "PIDGainAngle_P", 0, NULL );
+	pstPidGainRateYawP = PARAM_FindParamByName( "PIDGainRateYaw_P", 0, NULL );
+	pstPidGainRateYawD = PARAM_FindParamByName( "PIDGainRateYaw_D", 0, NULL );
 
 	for ( ; ; )
 	{
 		uiMillisSinceBoot += TASK_TICK_MS;
 
-#if 0
-		while ( -1 != ( value = port_getchar_nonblock() ) )
-		{
-			buf[count++] = value;
-		}
+#ifdef PID_TUNE
 
-		if ( count > 0 )
-		{
-			printf( "You typed: " );
+		ReadPIDTuneMessage();
+		SendPIDTuneTelem();
 
-			for( index = 0; index < count; index++ )
-			{
-				port_putchar( buf[index] );
-			}
-
-			printf( "\r\n" );
-
-			count = 0;
-		}
-#else
-
+#else // Otherwise do mavlink
 		// Read mavlink messages from our receive buffer
 		ReadMavlink();
 
@@ -183,6 +231,86 @@ static void TaskHandler( void *arg )
 static void TimerHandler( TimerHandle_t xTimer )
 {
 	vTaskResume( xCommsTaskHandle );
+}
+
+/* ************************************************************************** */
+static void SendPIDTuneTelem( void )
+{
+	stPidTuneMsgFmt_t stMsg;
+	stFlightDetails_t stFlightDetails;
+	uint16_t uiIndex = 0;
+	uint8_t *pbyMsg;
+
+	memset( &stMsg, 0, sizeof( stPidTuneMsgFmt_t ) );
+
+	// Clear the queue
+	while ( uxQueueMessagesWaiting( _xCommsQueue ) )
+	{
+		xQueueReceive( _xCommsQueue, &stFlightDetails, 0 );
+	}
+
+	stMsg.fAttitudeRoll = stFlightDetails.stAttitude.x;
+	stMsg.fAttitudePitch = stFlightDetails.stAttitude.y;
+	stMsg.fAttitudeYaw = stFlightDetails.stAttitude.z;
+
+	stMsg.uiSig1 = 0xA5;
+	stMsg.uiSig2 = 0xA5;
+
+	stMsg.uiLen = sizeof( stPidTuneMsgFmt_t ) - 4;
+
+	stMsg.uiRxMsgCnt = uiRxMsgCount;
+
+	stMsg.fGainRateP = pstPidGainRateP->fValue;
+
+	pbyMsg = (uint8_t*)(void*)&stMsg;
+
+	while( uiIndex < sizeof( stPidTuneMsgFmt_t ) )
+	{
+		port_putchar( pbyMsg[uiIndex++] );
+	}
+}
+
+/* ************************************************************************** */
+static void ReadPIDTuneMessage( void )
+{
+	int iReadValue;
+	uint8_t *pbyMsg;
+
+	pbyMsg = ( (uint8_t*)(void*)&stMsg ) + 2;
+
+	// Read a byte at a time from our stream interface
+	while ( -1 != ( iReadValue = port_getchar_nonblock() ) )
+	{
+		if ( uiIndex == ( sizeof( stPidTuneCfgMsgFmt_t ) - 2 ) )
+		{
+			bySig2 = iReadValue;
+
+			if ( ( bySig1 == 0xA5 ) && ( bySig2 == 0xA5 ) )
+			{
+				bySig1 = bySig2 = 0;
+				uiIndex = 0;
+			}
+			else
+			{
+				bySig1 = bySig2;
+			}
+		}
+		else
+		{
+			// We are in the middle of reading a message
+			pbyMsg[uiIndex++] = (uint8_t)iReadValue;
+
+			if ( uiIndex == ( sizeof( stPidTuneCfgMsgFmt_t ) - 2 ) )
+			{
+				// Message done
+				pstPidGainRateP->fValue = stMsg.fPidRateP;
+				pstPidGainRateD->fValue = stMsg.fPidRateD;
+				pstPidGainAngleP->fValue = stMsg.fPidAngleP;
+
+				uiRxMsgCount++;
+			}
+		}
+	}
 }
 
 /* ************************************************************************** */
@@ -252,6 +380,7 @@ static void ReadMavlink( void )
 {
 	mavlink_status_t stStatus;
 	mavlink_param_set_t set;
+	mavlink_param_request_read_t stMsgParamReqRead;
 	int iReadValue;
 	stPARAM_t *pstParam;
 	size_t uiIndex;
@@ -280,6 +409,15 @@ static void ReadMavlink( void )
 					uiParamIndex = 0;
 
 					break;
+
+				case MAVLINK_MSG_ID_PARAM_REQUEST_READ:
+				{
+					mavlink_msg_param_request_read_decode( &mavlink_mesg_rx, &stMsgParamReqRead );
+
+					SendParam( stMsgParamReqRead.param_index );
+
+					break;
+				}
 
 				case MAVLINK_MSG_ID_PARAM_SET:
 				{

@@ -28,7 +28,7 @@
 /* ************************************************************************** **
  * Macros and Defines
  * ************************************************************************** */
-#define FLIGHT_TICK_MS			( 10UL )
+#define FLIGHT_TICK_MS			( 1UL )
 #define mArrayLen( x )			( sizeof( x ) / sizeof( x[0] ) )
 
 #define LSM9DS0_XM				( 0x1D ) // Would be 0x1E if SDO_XM is LOW
@@ -164,6 +164,7 @@ static void TaskHandler( void *arg )
 {
 	vector3f_t accel;
 	vector3f_t gyro;
+	vector3f_t mag;
 	vector3f_t stGyroBias;
 	stReceiverInput_t stReceiverInputs;
 	stMotorDemands_t stMotorDemands;
@@ -199,6 +200,7 @@ static void TaskHandler( void *arg )
 		// Read the latest accel and gyro values
 		LSM9DS0_readAccel( &stImu );
 		LSM9DS0_readGyro( &stImu );
+		LSM9DS0_readMag( &stImu );
 		LSM9DS0_readTemp( &stImu );
 
 		// Scale the accel values into g's
@@ -210,6 +212,11 @@ static void TaskHandler( void *arg )
 		gyro.x = LSM9DS0_calcGyro( &stImu, stImu.gx );
 		gyro.y = LSM9DS0_calcGyro( &stImu, stImu.gy );
 		gyro.z = LSM9DS0_calcGyro( &stImu, stImu.gz );
+
+		// Scale the gyro values into rad/sec
+		mag.x = LSM9DS0_calcMag( &stImu, stImu.mx );
+		mag.y = LSM9DS0_calcMag( &stImu, stImu.my );
+		mag.z = LSM9DS0_calcMag( &stImu, stImu.mz );
 
 		// Calculate and apply gyro bias
 		stGyroBias = GetBias( stImu.temperature );
@@ -233,6 +240,7 @@ static void TaskHandler( void *arg )
 		flight_process( FLIGHT_TICK_MS,
 						&accel,
 						&gyro,
+						&mag,
 						&stReceiverInputs,
 						&stMotorDemands );
 
@@ -281,6 +289,9 @@ static void UpdateParameters( void )
 
 	// Set the trim in the flight controller
 	FLIGHT_SetTrim( &stTrim );
+
+	// Update the PID gains of the flight controller (the ones that matter!)
+	FLIGHT_SetPidGains( pstPidGainRateP->fValue, pstPidGainRateD->fValue, pstPidGainAngleP->fValue );
 
 	return;
 }

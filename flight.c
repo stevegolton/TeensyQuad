@@ -10,7 +10,7 @@
 #include "pid.h"
 
 #define PIDGAIN_RATE_YAW_I (0)
-#define PIDGAIN_RATE_YAW_P (0.1)
+#define PIDGAIN_RATE_YAW_P (0)
 #define PIDGAIN_RATE_YAW_D (0)
 
 #define PIDGAIN_RATE_I (0)
@@ -89,6 +89,7 @@ void flight_setup( void )
 void flight_process( uint16_t uiTimestep,
 					 vector3f_t *pstAccel,
 					 vector3f_t *pstGyro,
+					 vector3f_t *pstMag,
 					 stReceiverInput_t *pstReceiverInput,
 					 stMotorDemands_t *pstMotorDemands )
 {
@@ -117,6 +118,7 @@ void flight_process( uint16_t uiTimestep,
 	SENSORFUSION_Update( &stSensorFusion,
 						 pstGyro,
 						 pstAccel,
+						 pstMag,
 						 &stRotation,
 						 fTimeStep );
 
@@ -196,6 +198,19 @@ void flight_process( uint16_t uiTimestep,
 void FLIGHT_SetTrim( const vector3f_t *const pstTrim )
 {
 	memcpy( &stTrim, pstTrim, sizeof( vector3f_t ) );
+
+	return;
+}
+
+/* ************************************************************************** */
+void FLIGHT_SetPidGains( const float fRateP, const float fRateD, const float fAngleP )
+{
+	PID_SetGains( &stPIDPitchRate, fRateP, fRateD, 0 );
+	PID_SetGains( &stPIDRollRate, fRateP, fRateD, 0 );
+	//PID_SetGains( stPIDYawRate, fRateP, fRateD, 0 );
+
+	PID_SetGains( &stPIDPitchAngle, fAngleP, 0, 0 );
+	PID_SetGains( &stPIDRollAngle, fAngleP, 0, 0 );
 
 	return;
 }
