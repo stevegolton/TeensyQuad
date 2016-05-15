@@ -41,6 +41,13 @@ void uart_init( const UART_MemMapPtr channel, const uint32_t baud );
 char uart_getchar( const UART_MemMapPtr channel );
 
 /**
+ * @brief		Get a character from the buffer - non blocking.
+ * @param[in]	channel		UART module's base register pointer.
+ * @return		The character received from our FIFO.
+ */
+int uart_getchar_nonblock( const UART_MemMapPtr channel );
+
+/**
  * @brief		Put a character into the tx buffer.
  * @param[in]	channel		UART module's base register pointer.
  * @param[in]	ch			Character to send.

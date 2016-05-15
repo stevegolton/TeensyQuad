@@ -85,6 +85,11 @@ int port_getchar( void )
 	return uart_getchar( UART0_BASE_PTR );
 }
 
+int port_getchar_nonblock( void )
+{
+	return uart_getchar_nonblock( UART0_BASE_PTR );
+}
+
 /**
  * @brief		Blinks a number of tixFlightTimerHandlermes with a given interval.
  * @param[in]	reps		Number of times to blink.

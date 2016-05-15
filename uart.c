@@ -9,10 +9,19 @@
 #include "common.h"
 #include <string.h>
 
+#define LEN_RX_BUF		( 1024 )
+
+char achReceiveBuffer[ LEN_RX_BUF ];
+size_t uiHead;
+size_t uiTail;
+
 void uart_init( const UART_MemMapPtr channel, const uint32_t baud )
 {
 	register uint16_t ubd, brfa;
 	uint8_t temp;
+
+	uiHead = 0;
+	uiTail = 0;
 
 	// Initialise serial port pins
 	PORTB_PCR16 = PORT_PCR_MUX( 0x3 );
@@ -46,7 +55,28 @@ void uart_init( const UART_MemMapPtr channel, const uint32_t baud )
 	UART_C4_REG( channel ) = temp | UART_C4_BRFA( brfa );
 
 	/* Enable receiver and transmitter */
-	UART_C2_REG( channel ) |= ( UART_C2_TE_MASK | UART_C2_RE_MASK );
+	UART_C2_REG( channel ) |= ( UART_C2_TE_MASK | UART_C2_RE_MASK | UART_C2_RIE_MASK );
+
+	// Enable interrupt in NVIC and set priority to 0 */
+	NVICICPR1 |= ( 1 << 13 );
+	NVICISER1 |= ( 1 << 13 );
+	NVICIP45 = 0x00;
+}
+
+void UART0_RX_TX_IRQHandler( void )
+{
+	while ( UART_S1_REG( UART0_BASE_PTR ) & UART_S1_RDRF_MASK )
+	{
+		achReceiveBuffer[uiHead++] = UART_D_REG( UART0_BASE_PTR );
+		uiHead %= LEN_RX_BUF;
+
+		// Move the tail on if we have caught up with it
+		if ( uiHead == uiTail )
+		{
+			uiTail++;
+			uiTail %= LEN_RX_BUF;
+		}
+	}
 }
 
 char uart_getchar( const UART_MemMapPtr channel )
@@ -56,6 +86,40 @@ char uart_getchar( const UART_MemMapPtr channel )
 
 	/* Return the 8-bit data from the receiver */
 	return UART_D_REG(channel);
+}
+
+int uart_getchar_nonblock( const UART_MemMapPtr channel )
+{
+	char cRetVal;
+
+	if ( uiHead == uiTail )
+	{
+		return -1;
+	}
+	else
+	{
+		DisableInterrupts;
+
+		cRetVal = achReceiveBuffer[ uiTail++ ];
+		uiTail %= LEN_RX_BUF;
+
+		EnableInterrupts;
+
+		return cRetVal;
+	}
+
+#if 0
+	/* Wait until character has been received */
+	if (!(UART_S1_REG(channel) & UART_S1_RDRF_MASK))
+	{
+		return -1;
+	}
+	else
+	{
+		/* Return the 8-bit data from the receiver */
+		return UART_D_REG(channel);
+	}
+#endif
 }
 
 void uart_putchar( const UART_MemMapPtr channel, const char ch )

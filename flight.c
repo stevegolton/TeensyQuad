@@ -11,9 +11,9 @@
 
 #define PIDGAIN_RATE_I (0)
 #define PIDGAIN_RATE_P (0.0048)
-#define PIDGAIN_RATE_D (0.0002)
+#define PIDGAIN_RATE_D (0.00006)
 
-#define PIDGAIN_ANGLE_P (0.92)
+#define PIDGAIN_ANGLE_P (4.0)
 #define PIDGAIN_ANGLE_I (0)
 #define PIDGAIN_ANGLE_D (0)
 
@@ -168,9 +168,9 @@ void flight_process( uint16_t uiTimestep,
 		// For example if we are rotating exactly at the desired angular speed,
 		// then this error will be 0 and no offset needs to be applied to the
 		// motors in this axis.
-		fRateErrRoll = ( -pstGyro->x );
-		fRateErrPitch = ( -pstGyro->y );
-		fRateErrYaw = ( pstReceiverInput->fYaw - pstGyro->z );
+		fRateErrRoll = ( -fRateTargetRoll + pstGyro->x );
+		fRateErrPitch = ( -fRateTargetPitch + pstGyro->y );
+		fRateErrYaw = ( pstReceiverInput->fYaw + ( pstGyro->z / 300.0f ) );
 
 		// The result of this PID will give us the desired angular acceleration
 		// which we can feed directly to the motors.

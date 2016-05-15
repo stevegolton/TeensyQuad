@@ -28,7 +28,7 @@
  * Macros and Defines
  * ************************************************************************** */
 #define FLIGHT_TICK_MS			( 10UL )
-#define mArrayLen( x )		( sizeof( x ) / sizeof( x[0] ) )
+#define mArrayLen( x )			( sizeof( x ) / sizeof( x[0] ) )
 
 #define LSM9DS0_XM				( 0x1D ) // Would be 0x1E if SDO_XM is LOW
 #define LSM9DS0_G				( 0x6B ) // Would be 0x6A if SDO_G is LOW
@@ -179,7 +179,9 @@ static void TaskHandler( void *arg )
 		gyro.y = LSM9DS0_calcGyro( &stImu, stImu.gy );
 		gyro.z = LSM9DS0_calcGyro( &stImu, stImu.gz );
 
+		// Calculate and apply gyro bias
 		stGyroBias = GetBias( stImu.temperature );
+		gyro = VECTOR3F_Subtract( gyro, stGyroBias );
 
 		/* Work out receiver input values as floats */
 		stReceiverInputs.fRoll = ( (float)( (int32_t)IODRIVER_GetInputPulseWidth( CFG_RECEIVER_ROLL ) - RECEIVER_CENTER ) ) / ( RECEIVER_RANGE / 2 );
@@ -188,8 +190,6 @@ static void TaskHandler( void *arg )
 		stReceiverInputs.fYaw = ( (float)( (int32_t)IODRIVER_GetInputPulseWidth( CFG_RECEIVER_YAW ) - RECEIVER_CENTER ) ) / ( RECEIVER_RANGE / 2 );
 		stReceiverInputs.fVarA = ( (float)IODRIVER_GetInputPulseWidth( CFG_RECEIVER_VRA ) ) / RECEIVER_RANGE;
 		stReceiverInputs.fVarB = ( (float)IODRIVER_GetInputPulseWidth( CFG_RECEIVER_VRB ) ) / RECEIVER_RANGE;
-
-		gyro = VECTOR3F_Subtract( gyro, stGyroBias );
 
 		// Process flight controller
 		flight_process( FLIGHT_TICK_MS,
