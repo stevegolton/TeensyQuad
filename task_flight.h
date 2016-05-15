@@ -12,6 +12,6 @@
 /**
  * @brief		Initialises the flight task.
  */
-void TASK_FLIGHT_Create( QueueHandle_t xCommsQueue, QueueHandle_t xLedPatternQueue );
+void TASK_FLIGHT_Create( void );
 
 #endif

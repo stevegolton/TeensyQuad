@@ -18,6 +18,7 @@
 #include "io_driver.h"		// IO driver
 #include "IPC_types.h"		// stLedPattern_t
 #include "ledstat.h"		// Led status controller
+#include "pubsub.h"			// Publish subscribe
 
 /* ************************************************************************** **
  * Macros and Defines
@@ -51,7 +52,7 @@ static void SetLed( void *const pvUserState, const bool bState );
  * ************************************************************************** */
 static TaskHandle_t xLedTaskHandle = NULL;
 static TimerHandle_t xLedTimerHandle = NULL;
-static QueueHandle_t _xLedPatternQueue;
+static hPUBSUB_Subscription_t hSubscription;
 static stLEDSTAT_Ctx_t stLedStat;
 
 static const uint16_t auiDefaultPattern[] = { 200, 500 };
@@ -61,10 +62,8 @@ static const uint16_t auiDefaultPattern[] = { 200, 500 };
  * ************************************************************************** */
 
 /* ************************************************************************** */
-void TASK_LED_Create( QueueHandle_t xLedPatternQueue )
+void TASK_LED_Create( void )
 {
-	_xLedPatternQueue = xLedPatternQueue;
-
 	LEDSTAT_Create( &stLedStat, SetLed, NULL );
 
 	// Create our flight task
@@ -85,6 +84,9 @@ void TASK_LED_Create( QueueHandle_t xLedPatternQueue )
 	// Set the default pattern
 	LEDSTAT_SetPattern( &stLedStat, auiDefaultPattern, mArrayLen( auiDefaultPattern ) );
 
+	// Subscribe to the message topic
+	hSubscription = PUBSUB_Subscribe( TOPIC_LED_PATTERN, sizeof( stLedPattern_t ), 4 );
+
 	return;
 }
 
@@ -103,9 +105,9 @@ static void TaskHandler( void *arg )
 	for ( ; ; )
 	{
 		// Clear the queue
-		while ( uxQueueMessagesWaiting( _xLedPatternQueue ) )
+		while ( PUBSUB_MessagesWaiting( hSubscription ) )
 		{
-			xQueueReceive( _xLedPatternQueue, &stLedPattern, 0 );
+			PUBSUB_Receive( hSubscription, &stLedPattern );
 			LEDSTAT_SetPattern( &stLedStat, stLedPattern.auiPattern, stLedPattern.sPatternLen );
 		}
 

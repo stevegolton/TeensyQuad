@@ -24,11 +24,6 @@
 #define STARTUP_BLINK_COUNT		( 3 )
 #define STARTUP_BLINK_PERIOD	( 100 )
 
-#define LED_TICK_MS				( 100UL )
-
-static QueueHandle_t xCommsQueue = NULL;
-static QueueHandle_t xLedPatternQueue = NULL;
-
 /**
  * @brief		Delay using a loop. MillisecxFlightTimerHandleronds are very approximate based on
  * 				trial and error for our clock speed. Interrupts with slow this
@@ -169,7 +164,10 @@ void vApplicationMallocFailedHook( void )
 	 configTOTAL_HEAP_SIZE configuration constant in FreeRTOSConfig.h. */
 	taskDISABLE_INTERRUPTS();
 	/* Write your code here ... */
-	for(;;) {}
+	while ( 1 )
+	{
+		blink( 1, 100 );
+	}
 }
 
 /**
@@ -192,13 +190,10 @@ int main( void )
 	// TODO check status?
 	i2c_init( 0, 0x01, 0x20 );
 
-	xCommsQueue = xQueueCreate( 20, sizeof( stFlightDetails_t ) );
-	xLedPatternQueue = xQueueCreate( 5, sizeof( stLedPattern_t ) );
-
 	// Create tasks
-	TASK_FLIGHT_Create( xCommsQueue, xLedPatternQueue );
-	TASK_COMMS_Create( xCommsQueue );
-	TASK_LED_Create( xLedPatternQueue );
+	TASK_FLIGHT_Create();
+	TASK_COMMS_Create();
+	TASK_LED_Create();
 
 	// Flash a little startup sequence, this isn't necessary at all, just nice
 	// to see a familiar sign before things start breaking!

@@ -5,11 +5,14 @@
 
 #define LEN_PATTERN_MAX		( 16 )
 
+#define TOPIC_FLIGHT_DETAILS	( 0 )
+#define TOPIC_LED_PATTERN		( 1 )
+
 typedef struct
 {
 	vector3f_t stAttitude;
 	vector3f_t stAttitudeRate;
-	uint16_t uiMissedSamples;
+	uint16_t uiFlightRunCount;
 
 } stFlightDetails_t;
 

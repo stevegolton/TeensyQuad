@@ -10,6 +10,6 @@
 /**
  * @brief		Initialises the flight task.
  */
-void TASK_COMMS_Create( QueueHandle_t xCommsQueue );
+void TASK_COMMS_Create( void );
 
 #endif

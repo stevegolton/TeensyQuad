@@ -10,6 +10,6 @@
 /**
  * @brief		Initialises the ledstat task.
  */
-void TASK_LED_Create( QueueHandle_t xLedPatternQueue );
+void TASK_LED_Create( void );
 
 #endif

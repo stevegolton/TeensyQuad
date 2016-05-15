@@ -24,6 +24,7 @@
 #include "i2c.h"			// I2C device driver
 #include "IPC_types.h"		// stFlightDetails_t
 #include "params.h"			// System parameter access
+#include "pubsub.h"			// IPC publish-subscribe
 
 /* ************************************************************************** **
  * Macros and Defines
@@ -62,8 +63,6 @@ static void TaskHandler( void *arg );
  * @param[in]	xTimer	Timer handle.
  */
 static void TimerHandler( TimerHandle_t xTimer );
-
-static void InitImu( void );
 
 static void UpdateParameters( void );
 
@@ -115,23 +114,17 @@ static stPARAM_t *pstPidGainAngleP;
 static stPARAM_t *pstPidGainRateYawP;
 static stPARAM_t *pstPidGainRateYawD;
 
-// Local queue pointers
-static QueueHandle_t _xCommsQueue;
-static QueueHandle_t _xLedPatternQueue;
-
 static uint16_t uiWhoAmI;
+
+static uint32_t uiRunCount;
 
 /* ************************************************************************** **
  * API Functions
  * ************************************************************************** */
 
 /* ************************************************************************** */
-void TASK_FLIGHT_Create( QueueHandle_t xCommsQueue, QueueHandle_t xLedPatternQueue )
+void TASK_FLIGHT_Create( void )
 {
-		// Store the instances of the IMU and ledstat queues to use
-	_xCommsQueue = xCommsQueue;
-	_xLedPatternQueue = xLedPatternQueue;
-
 	// Create our flight task
 	xTaskCreate( TaskHandler,					// The task's callback function
 				 "TASK_Flight",					// Task name
@@ -169,13 +162,15 @@ static void TaskHandler( void *arg )
 	stLedPattern_t stLedPattern;
 	uint8_t uiCount;
 
+	uiRunCount = 0;
+
 	// Start our timer which will resume this task accurately on a tick
 	xTimerStart( xFlightTimerHandle, 0 );
 
 	// Set the LED to blink with the "flying" pattern
 	memcpy( stLedPattern.auiPattern, auiLedPatternFlight, sizeof( auiLedPatternFlight ) );
 	stLedPattern.sPatternLen = mArrayLen( auiLedPatternFlight );
-	xQueueSend( _xLedPatternQueue, &stLedPattern, 0 );
+	PUBSUB_Publish( TOPIC_LED_PATTERN, &stLedPattern );
 
 	// Initialise LSM driver
 	LSM9DS0_Setup( &stImu, MODE_I2C, LSM9DS0_G, LSM9DS0_XM, write_byte, read_byte, read_bytes );
@@ -208,13 +203,15 @@ static void TaskHandler( void *arg )
 
 	for ( ; ; )
 	{
+		uiRunCount++;
+
 		// Collects trim and PID gain updates from the parameters and passes
 		// them into the flight controller if they have updated
 		UpdateParameters();
 
 		// Read the gyro fifo
 		uiCount = LSM9DS0_fifoCountGyro( &stImu );
-		printf( "G %d last=%d\r\n", uiCount, stImu.gx );
+		//printf( "G %d last=%d\r\n", uiCount, stImu.gx );
 		while ( uiCount-- > 0 )
 		{
 			LSM9DS0_readGyro( &stImu );
@@ -227,7 +224,7 @@ static void TaskHandler( void *arg )
 
 		// Read the accel fifo
 		uiCount = LSM9DS0_fifoCountAccel( &stImu );
-		printf( "X %d last=%d\r\n", uiCount, stImu.ax );
+		//printf( "X %d last=%d\r\n", uiCount, stImu.ax );
 		while ( uiCount-- > 0 )
 		{
 			LSM9DS0_readAccel( &stImu );
@@ -281,27 +278,15 @@ static void TaskHandler( void *arg )
 		IODRIVER_SetOutputPulseWidth( CFG_MOTOR_RL, (uint32_t)( stMotorDemands.fRL * RECEIVER_RANGE ) );
 		IODRIVER_SetOutputPulseWidth( CFG_MOTOR_RR, (uint32_t)( stMotorDemands.fRR * RECEIVER_RANGE ) );
 
-		// Send the flight details off to whoever is listening at the other
-		// end of this mysterious queue.
-		// TODO use a proper pub-sub message broker here so anyone can listen!
-		// Something like pubnub?
+		// Publish flight details
 		FLIGHT_GetRotation( &stFlightDetails.stAttitude );
 		stFlightDetails.stAttitudeRate = gyro;
-		xQueueSend( _xCommsQueue, &stFlightDetails, 0 );
-
-		//PrintDebug( accel, gyro, stImu.temperature );
+		stFlightDetails.uiFlightRunCount = uiRunCount;
+		PUBSUB_Publish( TOPIC_FLIGHT_DETAILS, &stFlightDetails );
 
 		// Suspend until our timer wakes us up again
 		vTaskSuspend( NULL );
 	}
-}
-
-/* ************************************************************************** */
-static void InitImu( void )
-{
-
-
-	return;
 }
 
 /* ************************************************************************** */

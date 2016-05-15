@@ -21,6 +21,7 @@
 #include "IPC_types.h"		// stFlightDetails_t
 #include "mavlink_1.0/common/mavlink.h"	// Mavlink msg writing & parsing
 #include "params.h"			// System parameters
+#include "pubsub.h"			// IPC publish-subscribe
 
 // This is horrible - we should be able to go through the stdio interface..
 // perhaps through a file descriptor? Need to look up how uarts are mapped
@@ -32,7 +33,7 @@ extern int port_getchar_nonblock( void );
 /* ************************************************************************** **
  * Macros and Defines
  * ************************************************************************** */
-#define TASK_TICK_MS		( 50UL )
+#define TASK_TICK_MS		( 500UL )
 #define mArraySize( x )		( sizeof( x ) / sizeof( x[0] ) )
 
 #define SYSID				( 69 )		// hehe
@@ -127,7 +128,6 @@ static mavlink_message_t mavlink_mesg_rx;
 static mavlink_message_t mavlink_mesg_tx;
 
 static uint32_t uiMillisSinceBoot;
-static QueueHandle_t _xCommsQueue;
 static uint16_t uiParamIndex;
 
 static stPARAM_t *pstPidGainRateP;
@@ -142,18 +142,18 @@ static uint32_t uiRxMsgCount;
 static stPidTuneCfgMsgFmt_t stMsg;
 static int uiIndex;
 
+static hPUBSUB_Subscription_t hFlightDetails;
+
 /* ************************************************************************** **
  * API Functions
  * ************************************************************************** */
 
 /* ************************************************************************** */
-void TASK_COMMS_Create( QueueHandle_t xCommsQueue )
+void TASK_COMMS_Create( void )
 {
-	_xCommsQueue = xCommsQueue;
-
 	bySig1 = bySig2 = 0;
 	uiRxMsgCount = 0;
-	uiIndex = ( sizeof( stPidTuneCfgMsgFmt_t ) - 2);
+	uiIndex = ( sizeof( stPidTuneCfgMsgFmt_t ) - 2 );
 
 	// Create our flight task
 	xTaskCreate( TaskHandler,					// The task's callback function
@@ -172,6 +172,8 @@ void TASK_COMMS_Create( QueueHandle_t xCommsQueue )
 
 	uiMillisSinceBoot = 0;
 
+	hFlightDetails = PUBSUB_Subscribe( TOPIC_FLIGHT_DETAILS, sizeof( stFlightDetails_t ), 16 );
+
 	return;
 }
 
@@ -182,6 +184,10 @@ void TASK_COMMS_Create( QueueHandle_t xCommsQueue )
 /* ************************************************************************** */
 static void TaskHandler( void *arg )
 {
+	stFlightDetails_t stFlightDetails;
+
+	memset( &stFlightDetails, 0, sizeof( stFlightDetails_t ) );
+
 	// Start our timer which will resume this task accurately on a tick
 	xTimerStart( xCommsTimerHandle, 0 );
 
@@ -215,6 +221,10 @@ static void TaskHandler( void *arg )
 		//SendHeartbeat();
 		//SendAttitude();
 
+		while ( true == PUBSUB_Receive( hFlightDetails, &stFlightDetails ) );
+
+		printf( "pubsub! %d\r\n", stFlightDetails.uiFlightRunCount );
+
 		if ( uiParamIndex < PARAM_GetParamCount() )
 		{
 			SendParam( uiParamIndex++ );
@@ -244,9 +254,9 @@ static void SendPIDTuneTelem( void )
 	memset( &stMsg, 0, sizeof( stPidTuneMsgFmt_t ) );
 
 	// Clear the queue
-	while ( uxQueueMessagesWaiting( _xCommsQueue ) )
+	while ( PUBSUB_MessagesWaiting( hFlightDetails ) )
 	{
-		xQueueReceive( _xCommsQueue, &stFlightDetails, 0 );
+		PUBSUB_Receive( hFlightDetails, &stFlightDetails );
 	}
 
 	stMsg.fAttitudeRoll = stFlightDetails.stAttitude.x;
@@ -347,9 +357,9 @@ static void SendAttitude( void )
 	uint16_t uiIndex = 0;
 
 	// Clear the queue
-	while ( uxQueueMessagesWaiting( _xCommsQueue ) )
+	while ( PUBSUB_MessagesWaiting( hFlightDetails ) )
 	{
-		xQueueReceive( _xCommsQueue, &stFlightDetails, 0 );
+		PUBSUB_Receive( hFlightDetails, &stFlightDetails );
 	}
 
 	// Send attitude - negate the roll (x) value for qground control

@@ -37,6 +37,7 @@ OBJECTS	= main.o \
 		  vector3f.o \
 		  params.o \
 		  MadgwickAHRS.o \
+		  pubsub.o \
 
 #  Select the toolchain by providing a path to the top level
 #  directory; this will be the folder that holds the
