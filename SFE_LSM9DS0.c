@@ -223,7 +223,7 @@ uint16_t LSM9DS0_begin( stLSM9DS0_t * stThis )
 					   A_SCALE_2G,
 					   M_SCALE_2GS,
 					   G_ODR_95_BW_125,
-					   A_ODR_50,
+					   A_ODR_25,
 					   M_ODR_50 );
 }
 
@@ -274,12 +274,16 @@ uint16_t LSM9DS0_begin_adv( stLSM9DS0_t * stThis,
 	initGyro(stThis);	// This will "turn on" the gyro. Setting up interrupts, etc.
 	LSM9DS0_setGyroODR(stThis, gODR); // Set the gyro output data rate and bandwidth.
 	LSM9DS0_setGyroScale(stThis, stThis->gScale); // Set the gyro range
-	
+
 	// Accelerometer initialization stuff:
 	initAccel(stThis); // "Turn on" all axes of the accel. Set up interrupts, etc.
 	LSM9DS0_setAccelODR(stThis, aODR); // Set the accel data rate.
 	LSM9DS0_setAccelScale(stThis, stThis->aScale); // Set the accel range.
 	
+	// Put accelerometer into FIFO mode
+	//uint8_t c = xmReadByte(stThis, CTRL_REG0_XM);
+	//xmWriteByte(stThis, CTRL_REG0_XM, c | 0x40);      // Enable accelerometer FIFO
+
 	// Magnetometer initialization stuff:
 	initMag(stThis); // "Turn on" all axes of the mag. Set up interrupts, etc.
 	LSM9DS0_setMagODR(stThis, mODR); // Set the magnetometer output data rate.
@@ -344,10 +348,24 @@ static void initGyro(stLSM9DS0_t * stThis)
 	HPen - HPF enable (0=disable, 1=enable)
 	INT1_Sel[1:0] - Int 1 selection configuration
 	Out_Sel[1:0] - Out selection configuration */
-	gWriteByte(stThis, CTRL_REG5_G, 0x00);
-	
+	gWriteByte(stThis, CTRL_REG5_G, 0x40);
+
 	// Temporary !!! For testing !!! Remove !!! Or make useful !!!
-	LSM9DS0_configGyroInt(stThis, 0x2A, 0, 0, 0, 0); // Trigger interrupt when above 0 DPS...
+	//LSM9DS0_configGyroInt(stThis, 0x2A, 0, 0, 0, 0); // Trigger interrupt when above 0 DPS...
+
+	// Enable gyro FIFO stream mode and set watermark at 32 samples
+	//wait(200);
+	gWriteByte(stThis, FIFO_CTRL_REG_G, 0x60 );
+
+	// Turn everything else off
+	gWriteByte(stThis, INT1_CFG_G, 0 );
+	gWriteByte(stThis, INT1_THS_XH_G, 0 );
+	gWriteByte(stThis, INT1_THS_XL_G, 0 );
+	gWriteByte(stThis, INT1_THS_YH_G, 0 );
+	gWriteByte(stThis, INT1_THS_YL_G, 0 );
+	gWriteByte(stThis, INT1_THS_ZH_G, 0 );
+	gWriteByte(stThis, INT1_THS_ZL_G, 0 );
+	gWriteByte(stThis, INT1_DURATION_G, 0 );
 }
 
 /* ************************************************************************** */
@@ -361,7 +379,7 @@ static void initAccel(stLSM9DS0_t * stThis)
 	HP_CLICK - HPF enabled for click (0: filter bypassed, 1: enabled)
 	HPIS1 - HPF enabled for interrupt generator 1 (0: bypassed, 1: enabled)
 	HPIS2 - HPF enabled for interrupt generator 2 (0: bypassed, 1 enabled)   */
-	xmWriteByte(stThis, CTRL_REG0_XM, 0x00);
+	xmWriteByte(stThis, CTRL_REG0_XM, 0x40);
 	
 	/* CTRL_REG1_XM (0x20) (Default value: 0x07)
 	Bits (7-0): AODR3 AODR2 AODR1 AODR0 BDU AZEN AYEN AXEN
@@ -374,7 +392,7 @@ static void initAccel(stLSM9DS0_t * stThis)
 		1: Output registers aren't updated until MSB and LSB have been read.
 	AZEN, AYEN, and AXEN - Acceleration x/y/z-axis enabled.
 		0: Axis disabled, 1: Axis enabled									 */	
-	xmWriteByte(stThis, CTRL_REG1_XM, 0x57); // 100Hz data rate, x/y/z all enabled
+	xmWriteByte(stThis, CTRL_REG1_XM, 0x07); // 100Hz data rate, x/y/z all enabled
 	
 	//Serial.println(xmReadByte(CTRL_REG1_XM));
 	/* CTRL_REG2_XM (0x21) (Default value: 0x00)
@@ -393,7 +411,15 @@ static void initAccel(stLSM9DS0_t * stThis)
 	Bits (7-0): P1_BOOT P1_TAP P1_INT1 P1_INT2 P1_INTM P1_DRDYA P1_DRDYM P1_EMPTY
 	*/
 	// Accelerometer data ready on INT1_XM (0x04)
-	xmWriteByte(stThis, CTRL_REG3_XM, 0x04);
+	xmWriteByte(stThis, CTRL_REG3_XM, 0x00);
+	xmWriteByte(stThis, CTRL_REG4_XM, 0x00);
+	xmWriteByte(stThis, CTRL_REG5_XM, 0x00);
+	xmWriteByte(stThis, CTRL_REG6_XM, 0x00);
+	xmWriteByte(stThis, CTRL_REG7_XM, 0x00);
+
+	// Enable accel FIFO stream mode and set watermark at 32 samples
+	//wait(200);
+	xmWriteByte(stThis, FIFO_CTRL_REG, 0x60);  // Enable accelerometer FIFO stream mode and set watermark at 32 samples
 }
 
 /* ************************************************************************** */
@@ -541,6 +567,12 @@ void LSM9DS0_readAccel(stLSM9DS0_t * stThis)
 }
 
 /* ************************************************************************** */
+uint8_t LSM9DS0_fifoCountAccel(stLSM9DS0_t * stThis)
+{
+	return (xmReadByte(stThis, FIFO_SRC_REG) & 0x1F); // Read number of stored accelerometer samples
+}
+
+/* ************************************************************************** */
 void LSM9DS0_readMag(stLSM9DS0_t * stThis)
 {
 	uint8_t temp[6]; // We'll read six bytes from the mag into temp	
@@ -566,6 +598,12 @@ void LSM9DS0_readGyro(stLSM9DS0_t * stThis)
 	stThis->gx = (temp[1] << 8) | temp[0]; // Store x-axis values into gx
 	stThis->gy = (temp[3] << 8) | temp[2]; // Store y-axis values into gy
 	stThis->gz = (temp[5] << 8) | temp[4]; // Store z-axis values into gz
+}
+
+/* ************************************************************************** */
+uint8_t LSM9DS0_fifoCountGyro(stLSM9DS0_t * stThis)
+{
+	return (gReadByte(stThis, FIFO_SRC_REG_G) & 0x1F); // Read number of stored samples
 }
 
 /* ************************************************************************** */

@@ -160,7 +160,7 @@ void TASK_COMMS_Create( QueueHandle_t xCommsQueue )
 				 "TASK_Comms",					// Task name
 				 512,							// We need a relatively big stack for mavlink message creation!
 				 NULL,							// Parameter to pass to the callback function, we have nothhing to pass..
-				 2,								// Priority, this is our only task so.. lets just use 0
+				 1,								// Priority, this is our only task so.. lets just use 0
 				 &xCommsTaskHandle );			// We could put a pointer to a task handle here which will be filled in when the task is created
 
 	// Create a timer for our flight task
@@ -209,11 +209,11 @@ static void TaskHandler( void *arg )
 
 #else // Otherwise do mavlink
 		// Read mavlink messages from our receive buffer
-		ReadMavlink();
+		//ReadMavlink();
 
 		// Send standard telemetry & heartbeat messages
-		SendHeartbeat();
-		SendAttitude();
+		//SendHeartbeat();
+		//SendAttitude();
 
 		if ( uiParamIndex < PARAM_GetParamCount() )
 		{

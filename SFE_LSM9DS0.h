@@ -326,6 +326,10 @@ void LSM9DS0_readGyro(stLSM9DS0_t * stThis);
 // those _after_ calling readAccel().
 void LSM9DS0_readAccel(stLSM9DS0_t * stThis);
 
+uint8_t LSM9DS0_fifoCountGyro(stLSM9DS0_t * stThis);
+
+uint8_t LSM9DS0_fifoCountAccel(stLSM9DS0_t * stThis);
+
 // readMag() -- Read the magnetometer output registers.
 // This function will read all six magnetometer output registers.
 // The readings are stored in the class' mx, my, and mz variables. Read

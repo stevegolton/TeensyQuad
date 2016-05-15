@@ -9,6 +9,7 @@ typedef struct
 {
 	vector3f_t stAttitude;
 	vector3f_t stAttitudeRate;
+	uint16_t uiMissedSamples;
 
 } stFlightDetails_t;
 

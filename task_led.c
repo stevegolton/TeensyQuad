@@ -72,7 +72,7 @@ void TASK_LED_Create( QueueHandle_t xLedPatternQueue )
 				 "TASK_Led",					// Task name
 				 300,							// We need a relatively big stack for mavlink message creation!
 				 NULL,							// Parameter to pass to the callback function, we have nothhing to pass..
-				 2,								// Priority, this is our only task so.. lets just use 0
+				 0,								// Priority, this is our only task so.. lets just use 0
 				 &xLedTaskHandle );				// We could put a pointer to a task handle here which will be filled in when the task is created
 
 	// Create a timer for our flight task

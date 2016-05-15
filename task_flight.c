@@ -28,7 +28,7 @@
 /* ************************************************************************** **
  * Macros and Defines
  * ************************************************************************** */
-#define FLIGHT_TICK_MS			( 1UL )
+#define FLIGHT_TICK_MS			( 100UL )
 #define mArrayLen( x )			( sizeof( x ) / sizeof( x[0] ) )
 
 #define LSM9DS0_XM				( 0x1D ) // Would be 0x1E if SDO_XM is LOW
@@ -62,6 +62,8 @@ static void TaskHandler( void *arg );
  * @param[in]	xTimer	Timer handle.
  */
 static void TimerHandler( TimerHandle_t xTimer );
+
+static void InitImu( void );
 
 static void UpdateParameters( void );
 
@@ -117,6 +119,8 @@ static stPARAM_t *pstPidGainRateYawD;
 static QueueHandle_t _xCommsQueue;
 static QueueHandle_t _xLedPatternQueue;
 
+static uint16_t uiWhoAmI;
+
 /* ************************************************************************** **
  * API Functions
  * ************************************************************************** */
@@ -124,16 +128,9 @@ static QueueHandle_t _xLedPatternQueue;
 /* ************************************************************************** */
 void TASK_FLIGHT_Create( QueueHandle_t xCommsQueue, QueueHandle_t xLedPatternQueue )
 {
-		// Store the instances of the IMU and ledstat modules to use
+		// Store the instances of the IMU and ledstat queues to use
 	_xCommsQueue = xCommsQueue;
 	_xLedPatternQueue = xLedPatternQueue;
-
-	// Initialise LSM driver
-	LSM9DS0_Setup( &stImu, MODE_I2C, LSM9DS0_G, LSM9DS0_XM, write_byte, read_byte, read_bytes );
-	LSM9DS0_begin( &stImu );
-
-	// Initialize the flight controller module
-	flight_setup();
 
 	// Create our flight task
 	xTaskCreate( TaskHandler,					// The task's callback function
@@ -170,6 +167,7 @@ static void TaskHandler( void *arg )
 	stMotorDemands_t stMotorDemands;
 	stFlightDetails_t stFlightDetails;
 	stLedPattern_t stLedPattern;
+	uint8_t uiCount;
 
 	// Start our timer which will resume this task accurately on a tick
 	xTimerStart( xFlightTimerHandle, 0 );
@@ -177,8 +175,25 @@ static void TaskHandler( void *arg )
 	// Set the LED to blink with the "flying" pattern
 	memcpy( stLedPattern.auiPattern, auiLedPatternFlight, sizeof( auiLedPatternFlight ) );
 	stLedPattern.sPatternLen = mArrayLen( auiLedPatternFlight );
-
 	xQueueSend( _xLedPatternQueue, &stLedPattern, 0 );
+
+	// Initialise LSM driver
+	LSM9DS0_Setup( &stImu, MODE_I2C, LSM9DS0_G, LSM9DS0_XM, write_byte, read_byte, read_bytes );
+
+	// Initialise the IMU
+	uiWhoAmI = LSM9DS0_begin_adv( &stImu,
+								  G_SCALE_500DPS,
+								  A_SCALE_8G,
+								  M_SCALE_4GS,
+								  G_ODR_95_BW_125,
+								  A_ODR_100,
+								  M_ODR_25 );
+
+	// Print whoami to serve as a comms sanity check
+	printf( "LSM: Whoami=%X - should be 49D4\r\n", (int)uiWhoAmI );
+
+	// Initialize the flight controller module
+	flight_setup();
 
 	// Search for and store pointers to system parameters for quick access later
 	// This makes the assumption that parameters cannot come and go at runtime
@@ -197,21 +212,36 @@ static void TaskHandler( void *arg )
 		// them into the flight controller if they have updated
 		UpdateParameters();
 
+		// Read the gyro fifo
+		uiCount = LSM9DS0_fifoCountGyro( &stImu );
+		printf( "G %d last=%d\r\n", uiCount, stImu.gx );
+		while ( uiCount-- > 0 )
+		{
+			LSM9DS0_readGyro( &stImu );
+
+			// Read off gyro values scaling into rad/sec
+			gyro.x = LSM9DS0_calcGyro( &stImu, stImu.gx );
+			gyro.y = LSM9DS0_calcGyro( &stImu, stImu.gy );
+			gyro.z = LSM9DS0_calcGyro( &stImu, stImu.gz );
+		}
+
+		// Read the accel fifo
+		uiCount = LSM9DS0_fifoCountAccel( &stImu );
+		printf( "X %d last=%d\r\n", uiCount, stImu.ax );
+		while ( uiCount-- > 0 )
+		{
+			LSM9DS0_readAccel( &stImu );
+
+			// Read off gyro values scaling into rad/sec
+			accel.x = LSM9DS0_calcAccel( &stImu, stImu.ax );
+			accel.y = LSM9DS0_calcAccel( &stImu, stImu.ay );
+			accel.z = LSM9DS0_calcAccel( &stImu, stImu.az );
+		}
+
 		// Read the latest accel and gyro values
-		LSM9DS0_readAccel( &stImu );
-		LSM9DS0_readGyro( &stImu );
-		LSM9DS0_readMag( &stImu );
-		LSM9DS0_readTemp( &stImu );
-
-		// Scale the accel values into g's
-		accel.x = LSM9DS0_calcAccel( &stImu, stImu.ax );
-		accel.y = LSM9DS0_calcAccel( &stImu, stImu.ay );
-		accel.z = LSM9DS0_calcAccel( &stImu, stImu.az );
-
-		// Scale the gyro values into rad/sec
-		gyro.x = LSM9DS0_calcGyro( &stImu, stImu.gx );
-		gyro.y = LSM9DS0_calcGyro( &stImu, stImu.gy );
-		gyro.z = LSM9DS0_calcGyro( &stImu, stImu.gz );
+		//LSM9DS0_readAccel( &stImu );
+		//LSM9DS0_readGyro( &stImu );
+		//LSM9DS0_readMag( &stImu );
 
 		// Scale the gyro values into rad/sec
 		mag.x = LSM9DS0_calcMag( &stImu, stImu.mx );
@@ -219,6 +249,7 @@ static void TaskHandler( void *arg )
 		mag.z = LSM9DS0_calcMag( &stImu, stImu.mz );
 
 		// Calculate and apply gyro bias
+		LSM9DS0_readTemp( &stImu );
 		stGyroBias = GetBias( stImu.temperature );
 		gyro = VECTOR3F_Subtract( gyro, stGyroBias );
 
@@ -252,6 +283,8 @@ static void TaskHandler( void *arg )
 
 		// Send the flight details off to whoever is listening at the other
 		// end of this mysterious queue.
+		// TODO use a proper pub-sub message broker here so anyone can listen!
+		// Something like pubnub?
 		FLIGHT_GetRotation( &stFlightDetails.stAttitude );
 		stFlightDetails.stAttitudeRate = gyro;
 		xQueueSend( _xCommsQueue, &stFlightDetails, 0 );
@@ -261,6 +294,14 @@ static void TaskHandler( void *arg )
 		// Suspend until our timer wakes us up again
 		vTaskSuspend( NULL );
 	}
+}
+
+/* ************************************************************************** */
+static void InitImu( void )
+{
+
+
+	return;
 }
 
 /* ************************************************************************** */
