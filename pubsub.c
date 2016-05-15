@@ -53,7 +53,7 @@ void PUBSUB_Create( void )
 }
 
 /* ************************************************************************** */
-hPUBSUB_Subscription_t PUBSUB_Subscribe( uint32_t uiTopic, size_t sMsgSize, size_t sQueueLen )
+hPUBSUB_Subscription_t PUBSUB_Subscribe( const uint32_t uiTopic, const size_t sMsgSize, const size_t sQueueLen )
 {
 	struct stSubscription *pstSub = NULL;
 
@@ -82,7 +82,7 @@ hPUBSUB_Subscription_t PUBSUB_Subscribe( uint32_t uiTopic, size_t sMsgSize, size
 }
 
 /* ************************************************************************** */
-void PUBSUB_Publish( uint32_t uiTopic, uint8_t *pbyMsg )
+void PUBSUB_Publish( const uint32_t uiTopic, const void *const pvMsg )
 {
 	uint32_t uiIndex;
 
@@ -90,7 +90,7 @@ void PUBSUB_Publish( uint32_t uiTopic, uint8_t *pbyMsg )
 	{
 		if ( astSubs[uiIndex].uiTopic == uiTopic )
 		{
-			xQueueSend( astSubs[uiIndex].xQueue, pbyMsg, 0 );
+			xQueueSend( astSubs[uiIndex].xQueue, pvMsg, 0 );
 		}
 	}
 
@@ -98,9 +98,9 @@ void PUBSUB_Publish( uint32_t uiTopic, uint8_t *pbyMsg )
 }
 
 /* ************************************************************************** */
-bool PUBSUB_Receive( hPUBSUB_Subscription_t hSubscription, void *pbyMsg )
+bool PUBSUB_Receive( hPUBSUB_Subscription_t hSubscription, void *const pvMsg )
 {
-	if ( pdTRUE == xQueueReceive( hSubscription->xQueue, pbyMsg, 0 ) )
+	if ( pdTRUE == xQueueReceive( hSubscription->xQueue, pvMsg, 0 ) )
 	{
 		return true;
 	}

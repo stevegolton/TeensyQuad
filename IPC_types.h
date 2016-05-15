@@ -13,6 +13,9 @@ typedef struct
 	vector3f_t stAttitude;
 	vector3f_t stAttitudeRate;
 	uint16_t uiFlightRunCount;
+	uint16_t uiAccelSampleCount;
+	uint16_t uiGyroSampleCount;
+	uint16_t uiFlightTaskMissed;
 
 } stFlightDetails_t;
 

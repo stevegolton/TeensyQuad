@@ -29,7 +29,7 @@
 /* ************************************************************************** **
  * Macros and Defines
  * ************************************************************************** */
-#define FLIGHT_TICK_MS			( 100UL )
+#define FLIGHT_TICK_MS			( 10UL )
 #define mArrayLen( x )			( sizeof( x ) / sizeof( x[0] ) )
 
 #define LSM9DS0_XM				( 0x1D ) // Would be 0x1E if SDO_XM is LOW
@@ -97,13 +97,6 @@ static vector3f_t stAverageGyro;
 
 static const uint16_t auiLedPatternFlight[] = { 500, 500 };
 
-static const vector3f_t stDefaultTrim =
-{
-	-0.8f,
-	4.6f,
-	0.0f
-};
-
 // Parameters
 static stPARAM_t *pstTrimRoll;
 static stPARAM_t *pstTrimPitch;
@@ -116,7 +109,8 @@ static stPARAM_t *pstPidGainRateYawD;
 
 static uint16_t uiWhoAmI;
 
-static uint32_t uiRunCount;
+static bool bDone;
+static stFlightDetails_t stFlightDetails;
 
 /* ************************************************************************** **
  * API Functions
@@ -158,11 +152,10 @@ static void TaskHandler( void *arg )
 	vector3f_t stGyroBias;
 	stReceiverInput_t stReceiverInputs;
 	stMotorDemands_t stMotorDemands;
-	stFlightDetails_t stFlightDetails;
 	stLedPattern_t stLedPattern;
 	uint8_t uiCount;
 
-	uiRunCount = 0;
+	memset( &stFlightDetails, 0, sizeof( stFlightDetails ) );
 
 	// Start our timer which will resume this task accurately on a tick
 	xTimerStart( xFlightTimerHandle, 0 );
@@ -180,8 +173,8 @@ static void TaskHandler( void *arg )
 								  G_SCALE_500DPS,
 								  A_SCALE_8G,
 								  M_SCALE_4GS,
-								  G_ODR_95_BW_125,
-								  A_ODR_100,
+								  G_ODR_380_BW_100,
+								  A_ODR_800,
 								  M_ODR_25 );
 
 	// Print whoami to serve as a comms sanity check
@@ -203,7 +196,8 @@ static void TaskHandler( void *arg )
 
 	for ( ; ; )
 	{
-		uiRunCount++;
+		bDone = false;
+		stFlightDetails.uiFlightRunCount++;
 
 		// Collects trim and PID gain updates from the parameters and passes
 		// them into the flight controller if they have updated
@@ -211,7 +205,8 @@ static void TaskHandler( void *arg )
 
 		// Read the gyro fifo
 		uiCount = LSM9DS0_fifoCountGyro( &stImu );
-		//printf( "G %d last=%d\r\n", uiCount, stImu.gx );
+		stFlightDetails.uiGyroSampleCount += uiCount;
+
 		while ( uiCount-- > 0 )
 		{
 			LSM9DS0_readGyro( &stImu );
@@ -224,7 +219,8 @@ static void TaskHandler( void *arg )
 
 		// Read the accel fifo
 		uiCount = LSM9DS0_fifoCountAccel( &stImu );
-		//printf( "X %d last=%d\r\n", uiCount, stImu.ax );
+		stFlightDetails.uiAccelSampleCount += uiCount;
+
 		while ( uiCount-- > 0 )
 		{
 			LSM9DS0_readAccel( &stImu );
@@ -234,6 +230,8 @@ static void TaskHandler( void *arg )
 			accel.y = LSM9DS0_calcAccel( &stImu, stImu.ay );
 			accel.z = LSM9DS0_calcAccel( &stImu, stImu.az );
 		}
+
+#if 1
 
 		// Read the latest accel and gyro values
 		//LSM9DS0_readAccel( &stImu );
@@ -278,13 +276,15 @@ static void TaskHandler( void *arg )
 		IODRIVER_SetOutputPulseWidth( CFG_MOTOR_RL, (uint32_t)( stMotorDemands.fRL * RECEIVER_RANGE ) );
 		IODRIVER_SetOutputPulseWidth( CFG_MOTOR_RR, (uint32_t)( stMotorDemands.fRR * RECEIVER_RANGE ) );
 
+#endif
+
 		// Publish flight details
 		FLIGHT_GetRotation( &stFlightDetails.stAttitude );
 		stFlightDetails.stAttitudeRate = gyro;
-		stFlightDetails.uiFlightRunCount = uiRunCount;
 		PUBSUB_Publish( TOPIC_FLIGHT_DETAILS, &stFlightDetails );
 
 		// Suspend until our timer wakes us up again
+		bDone = true;
 		vTaskSuspend( NULL );
 	}
 }
@@ -292,10 +292,7 @@ static void TaskHandler( void *arg )
 /* ************************************************************************** */
 static void UpdateParameters( void )
 {
-	vector3f_t stTrim;
-
-	// Make a copy the default trim
-	stTrim = stDefaultTrim;
+	vector3f_t stTrim = { 0, };
 
 	// Copy in each parameter if they exist
 	if ( pstTrimRoll )
@@ -325,7 +322,14 @@ static void UpdateParameters( void )
 /* ************************************************************************** */
 static void TimerHandler( TimerHandle_t xTimer )
 {
-	vTaskResume( xFlightTaskHandle );
+	if ( bDone == false )
+	{
+		stFlightDetails.uiFlightTaskMissed++;
+	}
+	else
+	{
+		vTaskResume( xFlightTaskHandle );
+	}
 
 	return;
 }

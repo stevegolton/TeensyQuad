@@ -223,7 +223,12 @@ static void TaskHandler( void *arg )
 
 		while ( true == PUBSUB_Receive( hFlightDetails, &stFlightDetails ) );
 
-		printf( "pubsub! %d\r\n", stFlightDetails.uiFlightRunCount );
+		printf( "runcnt=%d, gyrocnt=%d, accelcount=%d missed=%d\r\n",
+				stFlightDetails.uiFlightRunCount,
+				stFlightDetails.uiGyroSampleCount,
+				stFlightDetails.uiAccelSampleCount,
+				stFlightDetails.uiFlightTaskMissed
+				);
 
 		if ( uiParamIndex < PARAM_GetParamCount() )
 		{

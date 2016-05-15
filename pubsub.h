@@ -14,9 +14,9 @@ typedef struct stSubscription* hPUBSUB_Subscription_t;
  */
 void PUBSUB_Create( void );
 
-hPUBSUB_Subscription_t PUBSUB_Subscribe( uint32_t uiTopic, size_t sMsgSize, size_t sQueueLen );
-void PUBSUB_Publish( uint32_t uiTopic, uint8_t *pbyMsg );
-bool PUBSUB_Receive( hPUBSUB_Subscription_t hSubscription, void *pbyMsg );
+hPUBSUB_Subscription_t PUBSUB_Subscribe( const uint32_t uiTopic, const size_t sMsgSize, const size_t sQueueLen );
+void PUBSUB_Publish( const uint32_t uiTopic, const void *const pvMsg  );
+bool PUBSUB_Receive( hPUBSUB_Subscription_t hSubscription, void *const pbyMsg );
 uint32_t PUBSUB_MessagesWaiting( hPUBSUB_Subscription_t hSubscription );
 
 #endif
